@@ -1,0 +1,1043 @@
+// LOST: The Missing Island — Parts 1 & 2. Bootstrap, game modes, zone loading, quest chain and saves.
+// Zone content and zone-specific interactions live in src/zones/*, story data in src/data/*.
+import * as THREE from 'three';
+import { createEnvironment } from './env.js';
+import { Player } from './player.js';
+import { IntroScene } from './intro.js';
+import { AudioSystem } from './audio.js';
+import { UI } from './ui.js';
+import { Sequencer } from './core/sequencer.js';
+import { disposeTree } from './core/dispose.js';
+import { ITEMS } from './data/items.js';
+import { QUESTS, questById } from './data/quests.js';
+import { FINAL_ENTRY, CLUES } from './data/clues.js';
+import { QUEST_INFO, mainGoal, CLUE_LEARNED } from './data/story.js';
+import { freshState, loadState, saveState, clearState, loadSettings, saveSettings, storageAvailable } from './save.js';
+import { CONTAINERS, add as invAdd, count as invCount, spaceFor, transfer, totals } from './systems/inventory.js';
+import { isStorable } from './data/items.js';
+import { RECIPES } from './data/recipes.js';
+
+// zones are separate chunks, loaded on demand and disposed when left
+const ZONES = {
+  beach: () => import('./zones/beach/index.js'),
+  forest: () => import('./zones/forest/index.js'),
+};
+
+const params = new URLSearchParams(location.search);
+const DEBUG = params.has('debug');
+const $ = (id) => document.getElementById(id);
+
+// ------------------------------------------------------------------ renderer
+const canvas = $('game');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(params.has('lowfx') ? 0.5 : Math.min(window.devicePixelRatio, 1.5));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.92;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 4000);
+const ui = new UI();
+const audio = new AudioSystem();
+const settings = loadSettings();
+audio.volume = settings.volume;
+const seq = new Sequencer();
+
+const game = {
+  mode: 'loading', // loading | title | intro | wake | play | journal | keypad | paused | reveal | cine | transition | end
+  state: freshState(),
+  zone: null,
+  zonePromise: null,
+  input: {},
+  focused: null,
+  time: 0,
+  modeTime: 0,
+  lastSave: 0,
+  pointerLocked: false,
+  suppressPause: false,
+  boundaryCooldown: 0,
+  hintTimer: 0,
+  anims: [],
+  flicker: 0,
+  lookTween: null,
+  cineCam: null,
+  lastDispose: null,
+};
+let env, player, intro;
+
+window.addEventListener('resize', () => {
+  renderer.setSize(innerWidth, innerHeight);
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  intro && intro.resize();
+});
+
+const has = (id) => game.state.collected.includes(id);
+
+// first-time guidance for a mechanic; remembered across sessions so it never repeats
+const TIPS = {
+  move: 'WASD — תנועה · לחץ על המסך והזז את העכבר כדי להסתכל · Shift — ריצה.',
+  interact: 'כשמופיעה הנחיה בתחתית המסך, לחץ E כדי לבדוק חפץ או לאסוף אותו.',
+  flashlight: 'F מדליק ומכבה את הפנס.',
+  journal: 'J פותח את החוברת: מה אני יודע, הרמזים שמצאתי והמפה.',
+  clue: 'כל רמז נרשם בחוברת (J ← רמזים). המשימה מתעדכנת לפי מה שגילית.',
+  locked: 'זה נעול בצירוף. חפש בסביבה פרטים שמסבירים אותו — כל מה שמצאת שמור בחוברת (J).',
+  hint: 'תקוע? H נותן רמז. כל לחיצה ברורה יותר — והאחרונה מסבירה את הפתרון.',
+  forest: 'ביער אין חץ. נווט לפי האור האדום, השבילים וציוני הדרך — ולפי מפת היער בחוברת (J ← מפה).',
+  storage: 'בתיבה: לחיצה מעבירה ערימה שלמה, Shift+לחיצה מעבירה פריט אחד.',
+};
+function tip(id) {
+  settings.tutorials = settings.tutorials || {};
+  if (settings.tutorials[id] || !TIPS[id]) return;
+  settings.tutorials[id] = true;
+  saveSettings(settings);
+  ui.tip(TIPS[id]);
+}
+function setMode(m) { game.mode = m; game.modeTime = 0; }
+
+// ------------------------------------------------------------------ API handed to zones
+const api = {
+  get state() { return game.state; },
+  get player() { return player; },
+  audio, ui, seq,
+  has,
+  collect,
+  setFlag(k, v = true) { game.state.flags[k] = v; },
+  thought(text, seconds = 3.6, delay = 0) { delay ? seq.after(delay, () => ui.thought(text, seconds)) : ui.thought(text, seconds); },
+  toast: (text, kind = '', life) => ui.toast(text, kind, life),
+  subtitle: (text, kind, tr, seconds) => ui.subtitle(text, kind, tr, seconds),
+  persist: () => persist(),
+  collectResource,
+  invCount: (id) => invCount(game.state.inv, id),
+  openStorage,
+  openWorkbench,
+  refresh: () => refreshHUD(),
+  openSymbolLock: (opts) => openPuzzle('openSymbolLock', opts),
+  openWiring: (opts) => openPuzzle('openWiring', opts),
+  openTuning: (opts) => openPuzzle('openTuning', { ...opts, tuner: audio.startTuning() }),
+  openScope,
+  openBoard() {
+    audio.page();
+    ui.journalTab = 'clues';
+    openJournal();
+    ui.thought('הלוח שלי. כל מה שמצאתי, מחובר בחוט אדום.', 3);
+  },
+  checkQuests: () => checkQuests(),
+  setFlashlight: (on) => setFlashlight(on),
+  enterZone: (to, spawn) => enterZone(to, spawn),
+  animate(dur, fn, done) { game.anims.push({ t: 0, dur, fn, done }); },
+  flickerFlashlight(seconds) { game.flicker = seconds; },
+  lookToward(pos, seconds = 0.7) {
+    const dx = pos.x - player.pos.x, dz = pos.z - player.pos.z;
+    let target = Math.atan2(-dx, -dz);
+    let d = target - player.camYaw;
+    d = Math.atan2(Math.sin(d), Math.cos(d));
+    game.lookTween = { from: player.camYaw, to: player.camYaw + d, t: 0, dur: seconds };
+    player.facing = Math.atan2(dx, dz); // turn the survivor too, so the flashlight lands on it
+  },
+  openKeypad(opts) {
+    tip('locked');
+    setMode('keypad');
+    releasePointer();
+    ui.setPrompt(null);
+    ui.openKeypad({ ...opts, onClose: () => { if (game.mode === 'keypad') { setMode('play'); updateLockHint(); } } });
+  },
+  beginCinematic(cameraFn) {
+    releasePointer();
+    ui.setPrompt(null);
+    ui.setMarker(null);
+    ui.show('hud', false);
+    game.cineCam = cameraFn;
+    setMode('cine');
+  },
+  endCinematic() {
+    game.cineCam = null;
+    ui.show('hud', true);
+    refreshHUD();
+    setMode('play');
+  },
+  showFinalEntry() { audio.page(); ui.showFinalEntry(FINAL_ENTRY); },
+  hideFinalEntry() { ui.hideFinalEntry(); },
+  showEndcard: (part) => showEndcard(part),
+};
+
+// ------------------------------------------------------------------ boot
+async function boot() {
+  try {
+    env = createEnvironment(renderer);
+    player = new Player(env.scene, camera);
+    player.onBoundary = onBoundary;
+    intro = new IntroScene(audio, ui);
+    applySettings();
+    const saved = loadState();
+    // the title screen shows wherever the player last was
+    await loadZone(saved && saved.flags.introDone ? saved.zone : 'beach', (p, t) => ui.setLoading(p * 0.92, t), saved);
+  } catch (err) {
+    console.error(err);
+    ui.setLoading(1, 'שגיאה בטעינת העולם. נסה לרענן את הדף.');
+    return;
+  }
+  ui.setLoading(0.96, 'מכין שיידרים');
+  await new Promise((r) => setTimeout(r, 0));
+  renderer.compile(intro.scene, intro.camera);
+  ui.setLoading(1, 'מוכן');
+  setTimeout(() => { ui.show('loading', false); showTitle(); }, 250);
+  requestAnimationFrame(loop);
+}
+
+// ------------------------------------------------------------------ zones
+async function loadZone(id, onProgress = () => {}, stateForEnv = null) {
+  if (game.zone && game.zone.id === id) return game.zone;
+  if (game.zone) {
+    game.lastDispose = disposeTree(game.zone.group);
+    game.zone = null;
+  }
+  game.focused = null;
+  const mod = await ZONES[id]();
+  const zone = await mod.build(env, api, onProgress);
+  env.scene.add(zone.group);
+  game.zone = zone;
+  player.setZone(zone);
+  camera.far = zone.cameraFar;
+  camera.updateProjectionMatrix();
+  applyZoneEnv(stateForEnv || game.state);
+  zone.sync(stateForEnv || game.state);
+  applyShadowSetting();
+  const spawn = Object.values(zone.spawns)[0];
+  player.setPosition(spawn.x, spawn.z, spawn.yaw);
+  player.updateCamera(1);
+  renderer.compile(env.scene, camera);
+  return zone;
+}
+
+function applyZoneEnv(s = game.state) {
+  const z = game.zone;
+  if (!z) return;
+  env.setTime(z.time(s), { fogDensity: z.fogDensity(s) });
+}
+
+async function enterZone(to, spawnName) {
+  if (game.mode === 'transition' || !game.zone || game.zone.id === to) return;
+  setMode('transition');
+  releasePointer();
+  ui.setPrompt(null);
+  ui.setMarker(null);
+  ui.fade(1, 0.6);
+  audio.stopAmbience();
+  await new Promise((r) => setTimeout(r, 650));
+  const firstForest = to === 'forest' && !game.state.flags.nightfall;
+  if (to === 'forest') game.state.flags.nightfall = true;
+  game.state.zone = to;
+  ui.show('loading', true);
+  ui.setLoading(0, to === 'forest' ? 'נכנס ליער…' : 'חוזר אל החוף…');
+  await loadZone(to, (p, t) => ui.setLoading(p, t));
+  ui.show('loading', false);
+  const sp = game.zone.spawns[spawnName];
+  player.setPosition(sp.x, sp.z, sp.yaw);
+  player.camPitch = 0.25;
+  player.updateCamera(1);
+  if (firstForest) setFlashlight(true);
+  persist();
+  setMode('play');
+  checkQuests();
+  refreshHUD();
+  updateLockHint();
+  audio.resumeAmbience();
+  ui.fade(0, 1.4);
+  if (to === 'forest') setTimeout(() => tip('forest'), 3000);
+  if (firstForest) {
+    ui.titleCard('כמה שעות אחר כך', 'היער · לילה');
+    api.thought('החושך ירד מהר. הפנס הוא כל מה שיש לי — ואור אדום אחד, מעל הצמרות.', 5, 2.5);
+  }
+}
+
+// ------------------------------------------------------------------ items & quests
+function bagFull(need) {
+  audio.deny();
+  ui.toast(need ? `התיק מלא — אין מקום ל־${need}. אפשר לפנות מקום בתיבה שבמחנה על החוף.` : 'התיק מלא', 'warn', 4);
+}
+
+// returns true if the item was taken
+function collect(id, { silent = false } = {}) {
+  if (has(id)) return false;
+  const s = game.state;
+  if (isStorable(id)) {
+    if (spaceFor(s.inv, id) < 1) { bagFull(ITEMS[id].name); return false; }
+    invAdd(s.inv, id, 1);
+  }
+  s.collected.push(id);
+  if ((ITEMS[id].kind === 'clue' || ITEMS[id].clue) && !s.clues.includes(id)) s.clues.push(id);
+  if (!silent) {
+    audio.pickup();
+    player.playPickup();
+  }
+  if (ITEMS[id].kind === 'clue' || ITEMS[id].clue) {
+    const c = CLUES.find((x) => x.id === id);
+    ui.discovery(c ? c.title : ITEMS[id].name, CLUE_LEARNED[id]);
+    if (id === 'booklet') tip('journal'); else if (id !== 'stillHere') tip('clue');
+  } else {
+    ui.toast(ITEMS[id].toast, 'item', 3.6);
+  }
+  if (id === 'flashlight') tip('flashlight');
+  if (['water', 'flashlight', 'bandage'].includes(id)) api.thought(ITEMS[id].desc, 3.4, 0.4);
+  checkQuests();
+  refreshHUD(id);
+  persist();
+  return true;
+}
+
+// a resource pile: all of it goes into the bag, or none of it
+function collectResource(nodeId, itemId, qty) {
+  const s = game.state;
+  if (s.collected.includes(nodeId)) return false;
+  if (spaceFor(s.inv, itemId) < qty) { bagFull(`${ITEMS[itemId].name} ×${qty}`); return false; }
+  invAdd(s.inv, itemId, qty);
+  s.collected.push(nodeId);
+  audio.pickup();
+  player.playPickup();
+  ui.toast(`נאסף: ${ITEMS[itemId].name} ×${qty}`, 'item', 3);
+  refreshHUD(itemId);
+  persist();
+  return true;
+}
+
+function openStorage(containerId, onClosed) {
+  tip('storage');
+  const s = game.state;
+  const chest = s.containers[containerId];
+  setMode('storage');
+  releasePointer();
+  ui.setPrompt(null);
+  ui.openStorage({
+    title: CONTAINERS[containerId].name,
+    bag: s.inv,
+    chest,
+    keyItems: ['flashlight', 'booklet', 'powerCell'].filter((id) => has(id) && !(id === 'powerCell' && s.flags.powerInstalled)),
+    move(direction, id, qty) {
+      const [from, to] = direction === 'toChest' ? [s.inv, chest] : [chest, s.inv];
+      const r = transfer(from, to, id, qty);
+      if (r.moved) { audio.click(); persist(); } else audio.deny();
+      return r;
+    },
+    onClose() {
+      if (game.mode === 'storage') setMode('play');
+      refreshHUD();
+      persist();
+      updateLockHint();
+      onClosed && onClosed();
+    },
+  });
+}
+
+// a puzzle device takes the screen; the game waits behind it
+function openPuzzle(method, opts) {
+  if (method === 'openSymbolLock') tip('locked');
+  setMode('puzzle');
+  releasePointer();
+  ui.setPrompt(null);
+  ui[method]({
+    ...opts,
+    onClose() {
+      if (game.mode === 'puzzle') setMode('play');
+      refreshHUD();
+      persist();
+      updateLockHint();
+      opts.onClose && opts.onClose();
+    },
+  });
+}
+
+// looking through a spotting scope: narrow field of view, pan to search
+function openScope({ eye, yaw, pitch, glint, found, onFound }) {
+  setMode('scope');
+  releasePointer();
+  ui.setPrompt(null);
+  ui.show('hud', false);
+  game.scope = { eye, yaw, pitch, glint, onFound, found, hold: 0 };
+  glint.visible = true;
+  camera.fov = 13;
+  camera.updateProjectionMatrix();
+  ui.showScope(true);
+}
+function closeScope() {
+  if (!game.scope) return;
+  game.scope.glint.visible = false;
+  game.scope = null;
+  camera.fov = 60;
+  camera.updateProjectionMatrix();
+  ui.showScope(false);
+  ui.show('hud', true);
+  setMode('play');
+  refreshHUD();
+  updateLockHint();
+}
+function updateScope(dt) {
+  const sc = game.scope, inp = game.input;
+  const sp = 0.45 * dt;
+  if (inp.ArrowLeft || inp.KeyA) sc.yaw += sp;
+  if (inp.ArrowRight || inp.KeyD) sc.yaw -= sp;
+  if (inp.ArrowUp || inp.KeyW) sc.pitch += sp * 0.7;
+  if (inp.ArrowDown || inp.KeyS) sc.pitch -= sp * 0.7;
+  sc.pitch = Math.max(-0.35, Math.min(0.45, sc.pitch));
+  const dir = new THREE.Vector3(Math.sin(sc.yaw) * Math.cos(sc.pitch), Math.sin(sc.pitch), Math.cos(sc.yaw) * Math.cos(sc.pitch));
+  camera.position.copy(sc.eye);
+  camera.lookAt(sc.eye.clone().add(dir));
+  const toGlint = sc.glint.position.clone().sub(sc.eye).normalize();
+  if (dir.dot(toGlint) > Math.cos(THREE.MathUtils.degToRad(2.6))) {
+    sc.hold += dt;
+    if (sc.hold > 0.5 && !sc.found) { sc.found = true; sc.onFound(); }
+  } else sc.hold = 0;
+}
+
+// H: escalating hints for the current mission
+function showHint() {
+  const s = game.state;
+  const q = QUESTS[Math.min(s.questIndex, QUESTS.length - 1)];
+  if (!q.hints || !q.hints.length) { ui.toast('אין רמז כרגע.', '', 2); return; }
+  s.hints = s.hints || {};
+  const prev = s.hints[q.id] || 0;
+  const lvl = Math.min(prev + 1, q.hints.length);
+  if (lvl > prev) { s.hints[q.id] = lvl; s.hintsUsed = (s.hintsUsed || 0) + 1; }
+  audio.page();
+  ui.toast(`רמז ${lvl} / ${q.hints.length}`, '', 2.2);
+  ui.thought(q.hints[lvl - 1], 7);
+  persist();
+}
+
+function openWorkbench() {
+  const s = game.state;
+  setMode('storage');
+  releasePointer();
+  ui.setPrompt(null);
+  ui.openWorkbench({
+    materials: totals(s.inv, s.containers.baseChest),
+    recipes: RECIPES,
+    onClose() { if (game.mode === 'storage') setMode('play'); updateLockHint(); },
+  });
+}
+
+function checkQuests() {
+  const s = game.state;
+  let advanced = false;
+  while (s.questIndex < QUESTS.length - 1) {
+    const q = QUESTS[s.questIndex];
+    if (!q.done(s)) break;
+    if (q.cinematic === 'reveal') { startReveal(); return; }
+    s.questIndex++;
+    advanced = true;
+    onQuestStart(s.questIndex);
+  }
+  refreshHUD();
+  if (advanced) persist();
+}
+
+function onQuestStart(i) {
+  const q = QUESTS[i];
+  game.questTime = 0;
+  audio.quest();
+  ui.flashQuest();
+  ui.toast(q.final ? 'חלק 2 הושלם' : `משימה חדשה: ${q.title}`, 'quest', 4);
+  if (q.start) api.thought(q.start.thought, 4.2, q.start.delay || 0.8);
+}
+
+function refreshHUD(justAdded) {
+  const s = game.state;
+  const i = Math.min(s.questIndex, QUESTS.length - 1);
+  const q = QUESTS[i];
+  const info = QUEST_INFO[q.id];
+  const objective = info ? info.objective(s) : q.objective;
+  ui.setQuest(i, q, q.sub ? q.sub(s, ITEMS) : null, { goal: mainGoal(s), objective });
+  if (game.lastObjective && game.lastObjective !== objective && game.mode === 'play') ui.flashQuest();
+  game.lastObjective = objective;
+  ui.setHintAvailable(!!(q.hints && q.hints.length));
+  ui.setInventory(s, player.flashlightOn, justAdded);
+  player.showBandage(has('bandage'));
+  if (game.zone) game.zone.sync(s);
+}
+
+function objectiveTarget() {
+  const s = game.state;
+  const q = QUESTS[Math.min(s.questIndex, QUESTS.length - 1)];
+  const t = q.target && q.target(s, player.pos);
+  if (!t) return null;
+  if (t.zone !== game.zone.id) return game.zone.trailhead; // lead the player to the way out first
+  return t;
+}
+
+function persist() {
+  const s = game.state;
+  if (player && game.zone && ['play', 'journal', 'keypad', 'storage', 'puzzle', 'scope', 'end', 'paused', 'cine'].includes(game.mode)) {
+    s.player = { zone: game.zone.id, x: +player.pos.x.toFixed(2), z: +player.pos.z.toFixed(2), yaw: +player.facing.toFixed(3) };
+  }
+  if (game.zone) s.zone = game.zone.id;
+  s.flashlightOn = player ? player.flashlightOn : false;
+  saveState(s);
+  game.lastSave = game.time;
+}
+
+// ------------------------------------------------------------------ screens & flow
+function partLabel(s) {
+  const q = QUESTS[Math.min(s.questIndex, QUESTS.length - 1)];
+  if (q.final) return 'חלק 2 הושלם';
+  const first = q.part === 1 ? 0 : 6;
+  return `חלק ${q.part} · משימה ${s.questIndex - first + 1}`;
+}
+
+function showTitle() {
+  setMode('title');
+  audio.stopSpeech();
+  seq.clear();
+  ['title'].forEach((id) => ui.show(id, true));
+  ['hud', 'pause', 'endcard', 'keypad', 'final-entry'].forEach((id) => ui.show(id, false));
+  ui.subtitle(null);
+  ui.blur(0);
+  ui.eyes('hidden');
+  ui.fade(0, 0.8);
+  const saved = loadState();
+  const canContinue = saved && saved.flags.introDone;
+  ui.show('btn-continue', !!canContinue);
+  $('save-info').textContent = canContinue
+    ? `שמירה אחרונה: ${new Date(saved.savedAt).toLocaleString('he-IL')} · ${partLabel(saved)}`
+    : storageAvailable() ? '' : 'שים לב: הדפדפן חוסם שמירה מקומית — ההתקדמות לא תישמר.';
+  if (document.pointerLockElement) { game.suppressPause = true; document.exitPointerLock(); }
+}
+
+async function newGame() {
+  clearState();
+  seq.clear();
+  game.anims.length = 0;
+  game.state = freshState();
+  setFlashlight(false);
+  ui.show('title', false);
+  audio.init();
+  audio.setVolume(settings.volume);
+  // the forest may be loaded (title showed it); bring the beach back while the intro plays
+  game.zonePromise = game.zone.id === 'beach' ? Promise.resolve() : loadZone('beach');
+  game.zonePromise.then(() => { applyZoneEnv(); refreshHUD(); });
+  if (game.zone.id === 'beach') { applyZoneEnv(); game.zone.sync(game.state); }
+  startIntro();
+}
+
+async function continueGame() {
+  const saved = loadState();
+  if (!saved || !saved.flags.introDone) return newGame();
+  seq.clear();
+  game.state = saved;
+  ui.show('title', false);
+  audio.init();
+  audio.setVolume(settings.volume);
+  ui.fade(1, 0);
+  if (game.zone.id !== saved.zone) {
+    ui.show('loading', true);
+    await loadZone(saved.zone, (p, t) => ui.setLoading(p, t));
+    ui.show('loading', false);
+  }
+  applyZoneEnv();
+  const p = saved.player && (saved.player.zone || 'beach') === game.zone.id ? saved.player : Object.values(game.zone.spawns)[0];
+  player.setPosition(p.x, p.z, p.yaw ?? 0);
+  player.lying = 0;
+  setFlashlight(!!saved.flashlightOn && has('flashlight'));
+  ui.fade(0, 1.2);
+  audio.startAmbience();
+  audio.resumeAmbience();
+  enterPlay();
+  ui.toast('ההתקדמות נטענה', '', 2.5);
+  checkQuests(); // also resumes a reveal interrupted by a reload
+}
+
+function startIntro() {
+  setMode('intro');
+  ui.show('hud', false);
+  audio.stopAmbience();
+  ui.show('skip-hint', !!settings.introSeen);
+  intro.start(async () => {
+    settings.introSeen = true;
+    saveSettings(settings);
+    ui.show('skip-hint', false);
+    await game.zonePromise;
+    startWake();
+  });
+}
+
+function startWake() {
+  setMode('wake');
+  ui.fade(0, 0);
+  ui.eyes('');
+  ui.blur(10);
+  game.wakeFired = null;
+  const sp = game.zone.spawns.wake;
+  player.setPosition(sp.x, sp.z, sp.yaw);
+  player.lying = 1;
+  player.camPitch = 0.28;
+  audio.startAmbience();
+}
+
+function updateWake(dt) {
+  const t = game.modeTime;
+  const fired = (game.wakeFired ||= new Set());
+  const once = (k, at, fn) => { if (t >= at && !fired.has(k)) { fired.add(k); fn(); } };
+  once('blink1', 0.6, () => ui.eyes('half'));
+  once('blink2', 1.7, () => ui.eyes(''));
+  once('blink3', 2.4, () => ui.eyes('open'));
+  once('t1', 2.8, () => ui.thought('...איפה אני?', 2.6));
+  once('t2', 6.0, () => ui.thought('המטוס. התרסקנו.', 2.8));
+  ui.blur(Math.max(0, 10 - t * 2.2));
+  const stand = Math.min(1, Math.max(0, (t - 5.4) / 1.8));
+  player.lying = 1 - stand * stand * (3 - 2 * stand);
+  player.update(dt, {}, false);
+
+  // camera: from above the face, to behind the shoulder
+  const fwd = new THREE.Vector3(Math.sin(player.facing), 0, Math.cos(player.facing));
+  const headLying = player.pos.clone().addScaledVector(fwd, -0.82).add(new THREE.Vector3(0, 0.3, 0));
+  const top = headLying.clone().add(new THREE.Vector3(0, 1.6 + t * 0.12, 0)).addScaledVector(fwd, 0.6);
+  const k = Math.min(1, Math.max(0, (t - 6.2) / 2.4));
+  const kk = k * k * (3 - 2 * k);
+  player.updateCamera(1);
+  const follow = camera.position.clone();
+  camera.position.lerpVectors(top, follow, kk);
+  const lookA = headLying.clone().addScaledVector(fwd, 0.4);
+  const lookB = player.pos.clone().add(new THREE.Vector3(0, 1.45, 0)).addScaledVector(fwd, 1.5);
+  camera.lookAt(new THREE.Vector3().lerpVectors(lookA, lookB, kk));
+  if (t > 8.8) {
+    ui.eyes('hidden');
+    ui.blur(0);
+    game.wakeFired = null;
+    game.state.flags.introDone = true;
+    enterPlay();
+    onQuestStart(0);
+    persist();
+  }
+}
+
+function enterPlay() {
+  setMode('play');
+  setTimeout(() => tip('move'), 1500);
+  ui.show('hud', true);
+  ui.hintControls(true);
+  game.hintTimer = 22;
+  refreshHUD();
+  updateLockHint();
+}
+
+function skipIntro() {
+  if (game.mode === 'intro' && settings.introSeen) intro.finish();
+}
+
+// ------------------------------------------------------------------ journal
+function openJournal() {
+  setMode('journal');
+  if (has('booklet') && !game.state.flags.bookletRead) ui.journalTab = 'message';
+  ui.mapChoice = null;
+  ui.renderJournal(game.state, player.pos);
+  ui.show('journal', true);
+  ui.setPrompt(null);
+  audio.page();
+  releasePointer();
+  if (has('booklet') && !game.state.flags.bookletRead) {
+    game.state.flags.bookletRead = true;
+    game.pendingBookletQuest = true; // the quest updates when the booklet is closed, after reading
+  }
+}
+
+function closeJournal() {
+  ui.show('journal', false);
+  audio.page();
+  setMode('play');
+  updateLockHint();
+  refreshHUD();
+  if (game.pendingBookletQuest) {
+    game.pendingBookletQuest = false;
+    checkQuests();
+  }
+  persist();
+}
+
+document.querySelectorAll('.book-tabs .tab').forEach((t) => t.addEventListener('click', () => {
+  ui.journalTab = t.dataset.tab;
+  audio.page();
+  ui.renderJournal(game.state, player.pos);
+}));
+$('journal-close').addEventListener('click', closeJournal);
+
+// ------------------------------------------------------------------ Part 1 reveal & end cards
+function startReveal() {
+  if (game.mode === 'reveal') return;
+  setMode('reveal');
+  releasePointer();
+  ui.setPrompt(null);
+  ui.show('hud', false);
+  audio.stopAmbience();
+  audio.reveal();
+  const en = $('reveal-en'), he = $('reveal-he');
+  en.textContent = '';
+  he.classList.remove('show');
+  he.textContent = 'ההתרסקות לא הייתה תאונה.';
+  ui.show('reveal', true);
+  const text = 'THE CRASH WAS NO ACCIDENT.';
+  let i = 0;
+  setTimeout(function type() {
+    en.textContent = text.slice(0, i);
+    if (i === text.length) {
+      en.innerHTML = `<span class="glitch">${text}</span>`;
+      he.classList.add('show');
+      return;
+    }
+    i++;
+    audio.click();
+    setTimeout(type, text[i - 1] === ' ' ? 160 : 75);
+  }, 1400);
+  setTimeout(() => {
+    ui.show('reveal', false);
+    const s = game.state;
+    s.questIndex = questById('reveal') + 1;
+    s.flags.revealSeen = true;
+    audio.resumeAmbience();
+    audio.signalBeeps();
+    ui.show('hud', true);
+    setMode('play');
+    refreshHUD();
+    onQuestStart(s.questIndex);
+    persist();
+    // point the camera toward the signal above the jungle
+    player.camYaw = Math.atan2(player.pos.x - 8, player.pos.z + 178);
+    player.camPitch = 0.05;
+    api.thought('אור אדום, מהבהב, מעל היער. מישהו משדר.', 4.5, 0.9);
+    setTimeout(() => showEndcard(1), 5200);
+  }, 9000);
+}
+
+function showEndcard(part) {
+  if (game.mode !== 'play') return;
+  setMode('end');
+  releasePointer();
+  const s = game.state;
+  if (part === 1) {
+    $('end-kicker').textContent = 'סוף חלק 1';
+    $('end-title').textContent = 'ההתרסקות';
+    $('end-obj').innerHTML = 'משימה חדשה: <span dir="ltr">Find the source of the signal in the forest.</span>';
+    $('btn-keep').textContent = 'המשך לחלק 2';
+  } else {
+    $('end-kicker').textContent = 'סוף חלק 2';
+    $('end-title').textContent = 'האות';
+    $('end-obj').innerHTML = '<span dir="ltr" class="end-en">Someone is still here.</span><br>האורות ביער נדלקו. הסיפור ממשיך בחלק 3.';
+    $('btn-keep').textContent = 'המשך לחקור';
+  }
+  $('end-stats').textContent = `${s.clues.length} רשומות בחוברת · ${s.hintsUsed || 0} רמזים · ההתקדמות נשמרה`;
+  ui.show('endcard', true);
+}
+
+$('btn-keep').addEventListener('click', () => { ui.show('endcard', false); setMode('play'); updateLockHint(); requestPointer(); });
+$('btn-end-main').addEventListener('click', () => { persist(); ui.show('endcard', false); showTitle(); });
+
+// ------------------------------------------------------------------ pause & settings
+function pause() {
+  if (game.mode !== 'play') return;
+  setMode('paused');
+  persist();
+  $('pause-title').textContent = 'הפסקה';
+  ui.show('pause-menu', true);
+  ui.show('btn-settings-back', false);
+  ui.show('pause', true);
+  ui.setPrompt(null);
+}
+function resume() {
+  ui.show('pause', false);
+  setMode('play');
+  updateLockHint();
+  requestPointer();
+}
+
+function applyShadowSetting() {
+  renderer.shadowMap.enabled = settings.shadows;
+  env.setShadows(settings.shadows);
+  env.scene.traverse((o) => { if (o.material) [].concat(o.material).forEach((m) => (m.needsUpdate = true)); });
+}
+
+function applySettings() {
+  $('set-sens').value = settings.sens;
+  $('set-vol').value = settings.volume;
+  $('set-invert').checked = settings.invertY;
+  $('set-shadows').checked = settings.shadows;
+  player.settings.sens = settings.sens;
+  player.settings.invertY = settings.invertY;
+  audio.setVolume(settings.volume);
+  applyShadowSetting();
+}
+function bindSetting(id, key, prop = 'value', parse = Number) {
+  $(id).addEventListener('input', (e) => {
+    settings[key] = prop === 'checked' ? e.target.checked : parse(e.target.value);
+    saveSettings(settings);
+    if (key === 'shadows') applyShadowSetting();
+    player.settings.sens = settings.sens;
+    player.settings.invertY = settings.invertY;
+    audio.setVolume(settings.volume);
+    });
+}
+bindSetting('set-sens', 'sens');
+bindSetting('set-vol', 'volume');
+bindSetting('set-invert', 'invertY', 'checked');
+bindSetting('set-shadows', 'shadows', 'checked');
+
+$('btn-resume').addEventListener('click', resume);
+$('btn-main').addEventListener('click', () => { persist(); ui.show('pause', false); showTitle(); });
+$('btn-new2').addEventListener('click', () => confirmNew(() => { ui.show('pause', false); newGame(); }));
+$('btn-continue').addEventListener('click', () => { audio.init(); continueGame(); });
+$('btn-new').addEventListener('click', () => {
+  audio.init();
+  const saved = loadState();
+  if (saved && saved.flags.introDone) confirmNew(newGame); else newGame();
+});
+$('btn-title-settings').addEventListener('click', () => {
+  $('pause-title').textContent = 'הגדרות';
+  ui.show('pause-menu', false);
+  ui.show('btn-settings-back', true);
+  ui.show('pause', true);
+});
+$('btn-settings-back').addEventListener('click', () => ui.show('pause', false));
+
+function confirmNew(onYes) {
+  $('confirm-text').textContent = 'להתחיל משחק חדש? ההתקדמות השמורה בשני החלקים תימחק.';
+  ui.show('confirm', true);
+  $('confirm-yes').onclick = () => { ui.show('confirm', false); onYes(); };
+  $('confirm-no').onclick = () => ui.show('confirm', false);
+}
+
+// ------------------------------------------------------------------ input
+function requestPointer() {
+  if (game.mode !== 'play') return;
+  try {
+    const p = canvas.requestPointerLock && canvas.requestPointerLock();
+    if (p && p.catch) p.catch(() => {});
+  } catch (e) { /* pointer lock not available: drag-to-look still works */ }
+}
+function releasePointer() {
+  if (document.pointerLockElement) { game.suppressPause = true; document.exitPointerLock(); }
+  updateLockHint();
+}
+function updateLockHint() {
+  ui.show('lock-hint', game.mode === 'play' && !game.pointerLocked && !game.dragging);
+}
+
+document.addEventListener('pointerlockchange', () => {
+  game.pointerLocked = document.pointerLockElement === canvas;
+  if (!game.pointerLocked && game.mode === 'play' && !game.suppressPause) pause();
+  game.suppressPause = false;
+  updateLockHint();
+});
+
+canvas.addEventListener('mousedown', (e) => {
+  if (game.mode === 'scope') { game.dragging = true; game.lastMouse = { x: e.clientX, y: e.clientY }; return; }
+  if (game.mode !== 'play') return;
+  game.dragging = true;
+  game.lastMouse = { x: e.clientX, y: e.clientY };
+  requestPointer();
+  updateLockHint();
+});
+window.addEventListener('mouseup', () => { game.dragging = false; });
+window.addEventListener('mousemove', (e) => {
+  if (game.mode === 'scope' && game.dragging && game.lastMouse) {
+    game.scope.yaw -= (e.clientX - game.lastMouse.x) * 0.0016 * settings.sens;
+    game.scope.pitch -= (e.clientY - game.lastMouse.y) * 0.0016 * settings.sens * (settings.invertY ? -1 : 1);
+    game.lastMouse = { x: e.clientX, y: e.clientY };
+    return;
+  }
+  if (game.mode !== 'play') return;
+  if (game.pointerLocked) player.look(e.movementX, e.movementY);
+  else if (game.dragging && game.lastMouse) {
+    player.look(e.clientX - game.lastMouse.x, e.clientY - game.lastMouse.y);
+    game.lastMouse = { x: e.clientX, y: e.clientY };
+  }
+});
+
+window.addEventListener('keydown', (e) => {
+  if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(e.code)) e.preventDefault();
+  game.input[e.code] = true;
+  if (e.repeat) return;
+  switch (e.code) {
+    case 'Space': skipIntro(); break;
+    case 'KeyE':
+      if (game.mode === 'play') interact();
+      else if (game.mode === 'scope') closeScope();
+      break;
+    case 'KeyH': if (game.mode === 'play') showHint(); break;
+    case 'KeyJ':
+      if (game.mode === 'play') openJournal();
+      else if (game.mode === 'journal') closeJournal();
+      break;
+    case 'KeyF':
+      if (game.mode === 'play') {
+        if (!has('flashlight')) { ui.toast('עוד לא מצאתי פנס. אולי בין שברי המטוס.', 'warn'); break; }
+        setFlashlight(!player.flashlightOn);
+        audio.flashlight();
+      }
+      break;
+    case 'Escape':
+      if (game.mode === 'journal') closeJournal();
+      else if (game.mode === 'paused') resume();
+      else if (game.mode === 'scope') closeScope();
+      else if (game.mode === 'play') pause();
+      break;
+  }
+});
+window.addEventListener('keyup', (e) => { game.input[e.code] = false; });
+window.addEventListener('blur', () => { game.input = {}; });
+
+function setFlashlight(on) {
+  player.setFlashlight(on);
+  ui.setInventory(game.state, on);
+}
+
+function interact() {
+  const it = game.focused;
+  if (!it) return;
+  it.use();
+  refreshHUD();
+}
+
+function onBoundary(type) {
+  if (game.boundaryCooldown > 0 || !game.zone) return;
+  game.boundaryCooldown = 4;
+  const forest = game.zone.id === 'forest';
+  const msg = forest ? {
+    forest: 'הסבך צפונה סמיך מדי. האורות... רחוקים יותר ממה שנראה.',
+    sea: 'השביל חזרה אל החוף נמצא דרומה, באמצע.',
+    side: 'הסבך סמיך מדי לעבור כאן.',
+    cliff: 'תלול מדי לטפס. אולי יש עלייה במקום אחר.',
+  }[type] : {
+    forest: game.state.questIndex >= 6
+      ? 'הסבך כאן סמיך מדי. השביל הצפוני, מאחורי זנב המטוס, נכנס ליער.'
+      : 'הג׳ונגל סבוך מדי. קודם כדאי להבין מה קרה כאן.',
+    sea: 'המים עמוקים מדי. אין טעם לשחות בלי לדעת לאן.',
+    side: 'הסלעים תלולים מדי לטיפוס.',
+    cliff: 'תלול מדי לטפס כאן.',
+  }[type];
+  ui.thought(msg, 3);
+}
+
+// ------------------------------------------------------------------ main loop
+const clock = new THREE.Clock();
+function step(dt) {
+  game.time += dt;
+  game.modeTime += dt;
+  if (!['paused', 'title', 'loading'].includes(game.mode)) seq.update(dt);
+  for (const a of game.anims) {
+    a.t += dt;
+    a.fn(Math.min(1, a.t / a.dur));
+    if (a.t >= a.dur) { a.finished = true; a.done && a.done(); }
+  }
+  game.anims = game.anims.filter((a) => !a.finished);
+  if (game.mode === 'intro') { intro.update(dt); return; }
+  const zone = game.zone;
+  if (!zone || game.mode === 'transition') return;
+  const m = game.mode;
+  player.model.root.visible = m !== 'title';
+  if (m === 'title') {
+    zone.titleCamera(camera, game.time * 0.04);
+    env.update(dt, game.time, camera.position, camera);
+    zone.update(dt, game.time, camera.position, camera);
+    return;
+  }
+  if (m === 'wake') {
+    updateWake(dt);
+  } else if (m === 'cine') {
+    player.update(dt, {}, false);
+    game.cineCam && game.cineCam(camera, game.time);
+  } else if (m === 'scope') {
+    player.update(dt, {}, false);
+    updateScope(dt);
+  } else {
+    const active = m === 'play';
+    if (game.lookTween) {
+      const lt = game.lookTween;
+      lt.t += dt;
+      const k = Math.min(1, lt.t / lt.dur);
+      player.camYaw = lt.from + (lt.to - lt.from) * k * k * (3 - 2 * k);
+      if (k >= 1) game.lookTween = null;
+    }
+    player.update(dt, game.input, active);
+    player.updateCamera(dt);
+    if (active) updatePlay(dt);
+  }
+  // flashlight flicker (tension beats)
+  if (game.flicker > 0) {
+    game.flicker -= dt;
+    if (player.flashlightOn) player.flashlight.intensity = game.flicker > 0 ? (Math.random() < 0.45 ? 0 : 15 + Math.random() * 30) : 40;
+  }
+  env.update(dt, game.time, player.pos, camera);
+  zone.update(dt, game.time, player.pos, camera);
+  audio.updateListener(camera);
+  const amb = zone.ambience(player.pos);
+  audio.updateAmbience(game.time, amb.sea, amb.forest, env.mode === 'night' ? 1 : 0, amb.stream);
+}
+
+function loop() {
+  requestAnimationFrame(loop);
+  step(Math.min(clock.getDelta(), 0.05));
+  if (game.mode === 'intro') renderer.render(intro.scene, intro.camera);
+  else if (game.zone && game.mode !== 'transition') renderer.render(env.scene, camera);
+}
+
+function updatePlay(dt) {
+  const zone = game.zone;
+  game.boundaryCooldown -= dt;
+  zone.tick && zone.tick(dt, game.time, player);
+  if (game.mode !== 'play') return; // a zone trigger may have started a cinematic or transition
+
+  // walking out of the zone (trail between beach and forest)
+  for (const ex of zone.exits) {
+    if (ex.when(game.state) && ex.test(player.pos.x, player.pos.z)) { enterZone(ex.to, ex.spawn); return; }
+  }
+
+  // nearest interactable
+  let best = null, bd = 1e9;
+  for (const it of zone.interactables) {
+    if (!it.available()) continue;
+    const d = Math.hypot(it.x - player.pos.x, it.z - player.pos.z);
+    if (d < it.radius && d < bd) { bd = d; best = it; }
+  }
+  game.focused = best;
+  if (best) tip('interact');
+  if (best) ui.setPrompt(best.label(), best.locked ? best.locked() : false);
+  else ui.setPrompt(null);
+
+  // item glints bob
+  for (const it of zone.interactables) {
+    if (!it.glint || !it.glint.visible) continue;
+    const base = it.glintBase ?? (it.glintBase = it.glint.position.y - 0.6);
+    it.glint.position.y = base + 0.6 + Math.sin(game.time * 2.4 + it.x) * 0.08;
+    it.glint.material.opacity = 0.55 + Math.sin(game.time * 3.1 + it.z) * 0.35;
+  }
+
+  // no arrow or distance marker: the panel says what to investigate, the world shows where
+  game.questTime = (game.questTime || 0) + dt;
+  const cq = QUESTS[Math.min(game.state.questIndex, QUESTS.length - 1)];
+  if (game.questTime > 75 && cq.hints && cq.hints.length) tip('hint');
+
+  if (game.hintTimer > 0) { game.hintTimer -= dt; if (game.hintTimer <= 0) ui.hintControls(false); }
+  if (game.time - game.lastSave > 8) persist();
+}
+
+// ------------------------------------------------------------------ debug hooks (only with ?debug)
+if (DEBUG) {
+  window.__lost = {
+    game, renderer, settings, ui, seq, camera,
+    get player() { return player; },
+    get zone() { return game.zone; },
+    get env() { return env; },
+    teleport(x, z) { player.setPosition(x, z, player.facing); },
+    interact,
+    enterZone,
+    step(seconds, dt = 0.05) { for (let t = 0; t < seconds; t += dt) step(dt); },
+    near(id) {
+      const it = game.zone.interactables.find((i) => i.id === id);
+      return it ? { x: it.x, z: it.z, available: it.available() } : null;
+    },
+    keypad(code) { for (const k of code) ui.keypadPress(k); },
+    get scope() { return game.scope; },
+    showHint,
+  };
+}
+
+boot();

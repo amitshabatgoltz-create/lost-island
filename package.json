@@ -1,0 +1,18 @@
+{
+  "name": "lost-the-missing-island",
+  "version": "0.1.0",
+  "description": "LOST: The Missing Island — Part 1. A 3D browser survival-mystery game built with Three.js.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "vite build",
+    "preview": "vite preview --host"
+  },
+  "dependencies": {
+    "three": "0.170.0"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0"
+  }
+}

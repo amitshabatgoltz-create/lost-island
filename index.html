@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LOST: The Missing Island</title>
+  <meta name="description" content="משחק הישרדות ומסתורין בתלת־ממד בדפדפן. חלק 1: ההתרסקות · חלק 2: האות." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700;800&family=Amatic+SC:wght@400;700&family=Caveat:wght@500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./src/style.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%230b1118'/%3E%3Ccircle cx='50' cy='50' r='30' fill='none' stroke='%238fc4ff' stroke-width='7' stroke-dasharray='40 10'/%3E%3Cline x1='50' y1='32' x2='50' y2='68' stroke='%238fc4ff' stroke-width='7'/%3E%3C/svg%3E" />
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <!-- loading -->
+  <div id="loading" class="screen">
+    <div class="loading-inner">
+      <div class="logo small"><span class="logo-lost">LOST</span><span class="logo-sub">THE MISSING ISLAND</span></div>
+      <div class="bar"><div id="loading-fill"></div></div>
+      <div id="loading-text">טוען…</div>
+    </div>
+  </div>
+
+  <!-- title -->
+  <div id="title" class="screen hidden">
+    <div class="title-inner">
+      <div class="logo"><span class="logo-lost">LOST</span><span class="logo-sub">THE MISSING ISLAND</span></div>
+      <div class="chapter" id="chapter">חלק 1 · ההתרסקות · חלק 2 · האות</div>
+      <div class="menu">
+        <button id="btn-continue" class="btn primary hidden">המשך</button>
+        <button id="btn-new" class="btn">משחק חדש</button>
+        <button id="btn-title-settings" class="btn ghost">הגדרות</button>
+      </div>
+      <div id="save-info" class="save-info"></div>
+      <div class="title-foot">מומלץ לשחק עם אוזניות · עכבר ומקלדת</div>
+    </div>
+  </div>
+
+  <!-- HUD -->
+  <div id="hud" class="hidden">
+    <div id="quest" class="panel">
+      <div class="quest-goal"><span class="goal-label">המטרה</span><span id="quest-goal"></span></div>
+      <div class="quest-label"><span id="quest-num"></span></div>
+      <div id="quest-title"></div>
+      <div id="quest-obj"></div>
+      <ul id="quest-sub"></ul>
+      <div class="quest-keys"><span><kbd>J</kbd> מה אני יודע</span><span id="quest-hint" class="hidden"><kbd>H</kbd> רמז</span></div>
+    </div>
+    <div id="tip" class="hidden" role="status" aria-live="polite"><span class="tip-k">טיפ</span><span id="tip-text"></span></div>
+    <div id="marker" class="hidden">
+      <div id="marker-arrow">▲</div>
+      <div id="marker-dist"></div>
+    </div>
+    <div id="toasts"></div>
+    <div id="prompt" class="hidden"></div>
+    <div id="inventory"></div>
+    <div id="controls-hint" class="panel">
+      <span><b>WASD</b> תנועה</span><span><b>עכבר</b> מצלמה</span><span><b>Shift</b> ריצה</span><span><b>E</b> פעולה</span><span><b>J</b> חקירה</span><span><b>F</b> פנס</span><span><b>H</b> רמז</span><span><b>Esc</b> תפריט</span>
+    </div>
+    <div id="lock-hint" class="hidden">לחץ על המסך כדי לשלוט במצלמה</div>
+  </div>
+
+  <!-- cinematic layers -->
+  <div id="subtitles"></div>
+  <div id="titlecard" class="hidden"><div class="tc-a"></div><div class="tc-b"></div></div>
+  <div id="skip-hint" class="hidden">[Space] דלג</div>
+  <div id="eyelids" class="hidden"><div class="lid top"></div><div class="lid bottom"></div></div>
+  <div id="flash"></div>
+  <div id="fade"></div>
+
+  <!-- journal -->
+  <div id="journal" class="hidden">
+    <div class="book">
+      <div class="book-tabs">
+        <button data-tab="case" class="tab active">החקירה</button>
+        <button data-tab="message" class="tab">החוברת</button>
+        <button data-tab="clues" class="tab">רמזים</button>
+        <button data-tab="map" class="tab">מפה</button>
+      </div>
+      <button id="journal-close" class="close" aria-label="סגור">✕</button>
+      <div class="spread">
+        <div class="page page-right" id="page-right"></div>
+        <div class="page page-left" id="page-left"></div>
+      </div>
+      <div class="book-foot">J / Esc לסגירה</div>
+    </div>
+  </div>
+
+  <!-- pause / settings -->
+  <div id="pause" class="screen hidden">
+    <div class="panel pause-panel">
+      <h2 id="pause-title">הפסקה</h2>
+      <div class="menu" id="pause-menu">
+        <button id="btn-resume" class="btn primary">המשך</button>
+        <button id="btn-new2" class="btn">משחק חדש</button>
+        <button id="btn-main" class="btn ghost">תפריט ראשי</button>
+      </div>
+      <div class="settings">
+        <h3>הגדרות</h3>
+        <label>רגישות עכבר <input type="range" id="set-sens" min="0.3" max="2.5" step="0.05" /></label>
+        <label>עוצמת קול <input type="range" id="set-vol" min="0" max="1" step="0.05" /></label>
+        <label class="check"><input type="checkbox" id="set-invert" /> היפוך ציר Y</label>
+        <label class="check"><input type="checkbox" id="set-shadows" /> צללים (איכות גבוהה)</label>
+      </div>
+      <div class="pause-controls">
+        <b>שליטה:</b> WASD תנועה · עכבר מצלמה · Shift ריצה · E אינטראקציה · J חקירה וחוברת · H רמז · F פנס · Esc תפריט
+      </div>
+      <div class="save-note" id="save-note">ההתקדמות נשמרת אוטומטית.</div>
+      <button id="btn-settings-back" class="btn ghost hidden">חזרה</button>
+    </div>
+  </div>
+
+  <!-- confirm -->
+  <div id="confirm" class="screen hidden">
+    <div class="panel confirm-panel">
+      <p id="confirm-text"></p>
+      <div class="menu row">
+        <button id="confirm-yes" class="btn primary">כן</button>
+        <button id="confirm-no" class="btn ghost">ביטול</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- reveal + end card -->
+  <div id="reveal" class="hidden">
+    <div id="reveal-en"></div>
+    <div id="reveal-he"></div>
+  </div>
+  <div id="endcard" class="screen hidden">
+    <div class="panel end-panel">
+      <div class="end-kicker" id="end-kicker">סוף חלק 1</div>
+      <h2 id="end-title">ההתרסקות</h2>
+      <p class="end-obj" id="end-obj"></p>
+      <p id="end-stats"></p>
+      <div class="menu row">
+        <button id="btn-keep" class="btn primary">המשך לחלק 2</button>
+        <button id="btn-end-main" class="btn ghost">תפריט ראשי</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- keypad (locked container) -->
+  <div id="keypad" class="screen hidden">
+    <div class="panel keypad-panel" role="dialog" aria-labelledby="keypad-title">
+      <button id="keypad-close" class="close-x" aria-label="סגור">✕</button>
+      <div id="keypad-title" class="keypad-title"></div>
+      <div id="keypad-display" dir="ltr">_ _ _ _</div>
+      <div class="keys" dir="ltr">
+        <button data-key="1">1</button><button data-key="2">2</button><button data-key="3">3</button>
+        <button data-key="4">4</button><button data-key="5">5</button><button data-key="6">6</button>
+        <button data-key="7">7</button><button data-key="8">8</button><button data-key="9">9</button>
+        <button data-key="C" class="k-alt">C</button><button data-key="0">0</button><button data-key="OK" class="k-ok">OK</button>
+      </div>
+      <div class="keypad-help">ספרות במקלדת · Enter לאישור · Esc ליציאה</div>
+    </div>
+  </div>
+
+  <!-- base camp: storage chest -->
+  <div id="storage" class="screen hidden">
+    <div class="crate" role="dialog" aria-labelledby="storage-title">
+      <button id="storage-close" class="close-x" aria-label="סגור">✕</button>
+      <div class="crate-head"><span class="crate-kicker">מחנה הבסיס</span><h2 id="storage-title">תיבת העץ</h2></div>
+      <div class="crate-cols">
+        <section class="crate-col">
+          <div class="col-head"><span>התיק שלי</span><span id="bag-cap" class="cap"></span></div>
+          <div id="bag-grid" class="slots bag"></div>
+          <div id="key-items" class="key-items"></div>
+          <button id="store-all" class="btn small">כל המשאבים לתיבה</button>
+        </section>
+        <section class="crate-col">
+          <div class="col-head"><span>התיבה</span><span id="chest-cap" class="cap"></span></div>
+          <div id="chest-grid" class="slots chest"></div>
+        </section>
+      </div>
+      <div id="storage-msg" class="storage-msg" aria-live="polite"></div>
+      <div class="crate-foot">E / Esc לסגירה</div>
+    </div>
+  </div>
+
+  <!-- base camp: workbench -->
+  <div id="workbench" class="screen hidden">
+    <div class="crate bench" role="dialog" aria-labelledby="bench-title">
+      <button id="bench-close" class="close-x" aria-label="סגור">✕</button>
+      <div class="crate-head"><span class="crate-kicker">מחנה הבסיס</span><h2 id="bench-title">שולחן העבודה</h2></div>
+      <div class="col-head"><span>חומרים זמינים (בתיק ובתיבה)</span></div>
+      <div id="bench-materials" class="mats"></div>
+      <div class="col-head"><span>שרטוטים</span></div>
+      <p id="bench-recipes" class="bench-note"></p>
+      <div class="crate-foot">E / Esc לסגירה</div>
+    </div>
+  </div>
+
+  <!-- puzzle devices (symbol lock, wiring, tuning) -->
+  <div id="device" class="screen hidden">
+    <div class="panel device-panel" role="dialog" aria-labelledby="device-title">
+      <button id="device-close" class="close-x" aria-label="סגור">✕</button>
+      <div id="device-title" class="keypad-title"></div>
+      <div id="device-body"></div>
+      <div class="keypad-help">E / Esc ליציאה</div>
+    </div>
+  </div>
+
+  <!-- looking through the camp's spotting scope -->
+  <div id="scope-view" class="hidden">
+    <div class="scope-mask"></div>
+    <div class="scope-reticle"></div>
+    <div class="scope-help">גרור עם העכבר או חצים / WASD כדי להזיז · E / Esc ליציאה</div>
+  </div>
+
+  <!-- final booklet entry (Part 2 ending) -->
+  <div id="final-entry" class="hidden">
+    <div class="final-page">
+      <div class="final-kicker">החוברת · רשומה אחרונה</div>
+      <div id="final-entry-text" class="handwritten-en"></div>
+    </div>
+  </div>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
