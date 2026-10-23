@@ -3,7 +3,8 @@
 import * as THREE from 'three';
 import { fbm, mulberry32, smoothstep } from '../../noise.js';
 import { heightAt as terrainHeight, streamZ, streamLevel, distToPaths } from './terrain.js';
-import { FL, PRINTS, CLEARINGS, BOUNDS } from './layout.js';
+import { FL, FLOGS, PRINTS, CLEARINGS, BOUNDS } from './layout.js';
+import { buildClimbs } from './climbs.js';
 import {
   palmGeometries, jungleTreeGeometries, bushGeometry, fernGeometry, grassGeometry, softSprite,
 } from '../shared.js';
@@ -30,9 +31,11 @@ export async function build(env, api, onProgress = () => {}) {
   const shared = env.shared;
 
   // walkable height = terrain, except inside the cabin and on the bridge
-  let cabin = null, bridgeHeight = () => null;
+  let cabin = null, bridgeHeight = () => null, climbs = null;
   const heightAt = (x, z) => {
     if (cabin && cabin.inside(x, z)) return cabin.floorY;
+    const rock = climbs && climbs.platformHeight(x, z);
+    if (rock !== null && rock !== undefined) return rock;
     const b = bridgeHeight(x, z);
     const t = terrainHeight(x, z);
     return b !== null ? Math.max(b, t) : t;
@@ -94,7 +97,8 @@ export async function build(env, api, onProgress = () => {}) {
   onProgress(0.65, 'עצים, שורשים וסלעים');
   const { trunkMat, palmTrunkMat, canopyMat, smallMat, palmLeafMat } = vegetationMaterials(shared);
   buildGiantTrees(ctx, [[-14, 60, 1.9], [12, 18, 2.1], [-28, -2, 1.8], [-6, -46, 2.0], [40, -40, 1.9], [-60, 20, 2.2], [30, 70, 1.9], [-80, -70, 2.0]], canopyMat, trunkMat, jungleTreeGeometries);
-  buildLogs(ctx, [[8, 62, 7, 0.4, 0.45], [-24, 32, 6, 1.2, 0.4], [-54, -6, 8, -0.3, 0.5], [30, -28, 6, 0.9, 0.42], [-30, -52, 7, 2.1, 0.5], [48, 20, 9, 0.2, 0.55], [-70, 60, 6, 1.6, 0.4], [10, -86, 7, 0.1, 0.45]]);
+  buildLogs(ctx, FLOGS);
+  climbs = buildClimbs(ctx, FL.lookout, FLOGS);
   buildRocks(ctx, rnd);
   await yieldFrame();
   onProgress(0.75, 'צמחייה');
@@ -129,7 +133,7 @@ export async function build(env, api, onProgress = () => {}) {
   const zone = {
     id: 'forest',
     group, colliders, occluders, heightAt,
-    isPlatform: (x, z) => cabin.inside(x, z) || bridgeHeight(x, z) !== null,
+    isPlatform: (x, z) => cabin.inside(x, z) || bridgeHeight(x, z) !== null || climbs.platformHeight(x, z) !== null,
     bounds: BOUNDS,
     deepWater: null,
     cameraFar: 200,
@@ -187,6 +191,7 @@ export async function build(env, api, onProgress = () => {}) {
     },
   };
   createForestInteractions(zone, api);
+  zone.interactables.push(...climbs.interactions(api));
   return zone;
 }
 

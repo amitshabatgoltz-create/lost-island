@@ -183,6 +183,16 @@ export function createBeachInteractions(zone, api) {
       api.persist();
     },
   });
+  add({
+    id: 'campSeat', kind: 'examine', x: B.spots.seat.x, z: B.spots.seat.z, radius: 1.5,
+    available: () => !api.player.sitting,
+    label: () => 'שב ליד המדורה',
+    use: () => {
+      claimBase();
+      api.player.sit(B.sitSpot, B.sitSpot.yaw);
+      api.thought('רגע אחד לנשום. הגלים, האש. אני עדיין כאן.', 3.6, 2.2);
+    },
+  });
   function claimBase() {
     if (api.state.base.found) return;
     api.state.base.found = true;

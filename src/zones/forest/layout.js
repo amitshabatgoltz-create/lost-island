@@ -18,6 +18,7 @@ export const FL = {
   routeChart: { x: 72.6, z: -36.9 },
   scope: { x: 75.5, z: -41.2 },
   bridge: { x: -6, z: 42.4 },
+  lookout: { x: 8, z: -40, rot: 0.5 },          // climbable rock between the relay and the camp
   newSignal: { x: 64, z: -150, y: 30 },
   farLights: [[-58, -112], [-40, -122], [-20, -128], [2, -134], [22, -138], [40, -142], [56, -146]],
 };
@@ -42,6 +43,10 @@ export const CLEARINGS = [
   { x: -73, z: -46, r: 7 },
   { x: 19, z: -63, r: 19 },
   { x: 74, z: -38, r: 8 },
+  { x: 8, z: -40, r: 8 }, // lookout rock
 ];
+
+// fallen trunks: [x, z, length, rotation, radius]; each can be climbed over in the middle
+export const FLOGS = [[8, 62, 7, 0.4, 0.45], [-24, 32, 6, 1.2, 0.4], [-54, -6, 8, -0.3, 0.5], [30, -28, 6, 0.9, 0.42], [-30, -52, 7, 2.1, 0.5], [48, 20, 9, 0.2, 0.55], [-70, 60, 6, 1.6, 0.4], [10, -86, 7, 0.1, 0.45]];
 
 export const BOUNDS = { minX: -96, maxX: 96, minZ: -96, maxZ: 104 };

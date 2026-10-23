@@ -175,11 +175,13 @@ async function boot() {
     env = createEnvironment(renderer);
     player = new Player(env.scene, camera);
     player.onBoundary = onBoundary;
+    ui.setLoading(0.02, 'הדמות');
+    await player.load((p) => ui.setLoading(0.02 + p * 0.08, 'הדמות'));
     intro = new IntroScene(audio, ui);
     applySettings();
     const saved = loadState();
     // the title screen shows wherever the player last was
-    await loadZone(saved && saved.flags.introDone ? saved.zone : 'beach', (p, t) => ui.setLoading(p * 0.92, t), saved);
+    await loadZone(saved && saved.flags.introDone ? saved.zone : 'beach', (p, t) => ui.setLoading(0.1 + p * 0.82, t), saved);
   } catch (err) {
     console.error(err);
     ui.setLoading(1, 'שגיאה בטעינת העולם. נסה לרענן את הדף.');
@@ -591,13 +593,14 @@ function updateWake(dt) {
   once('t1', 2.8, () => ui.thought('...איפה אני?', 2.6));
   once('t2', 6.0, () => ui.thought('המטוס. התרסקנו.', 2.8));
   ui.blur(Math.max(0, 10 - t * 2.2));
-  const stand = Math.min(1, Math.max(0, (t - 5.4) / 1.8));
-  player.lying = 1 - stand * stand * (3 - 2 * stand);
+  // the Stand_Up clip is scrubbed by `lying`: still on the sand, then up over ~4.6 s
+  player.lying = Math.max(0.0001, 1 - Math.min(1, Math.max(0, (t - 4.2) / 4.6)));
+  if (t > 8.8) player.lying = 0;
   player.update(dt, {}, false);
 
   // camera: from above the face, to behind the shoulder
   const fwd = new THREE.Vector3(Math.sin(player.facing), 0, Math.cos(player.facing));
-  const headLying = player.pos.clone().addScaledVector(fwd, -0.82).add(new THREE.Vector3(0, 0.3, 0));
+  const headLying = (game.wakeHead ||= player.headPosition());
   const top = headLying.clone().add(new THREE.Vector3(0, 1.6 + t * 0.12, 0)).addScaledVector(fwd, 0.6);
   const k = Math.min(1, Math.max(0, (t - 6.2) / 2.4));
   const kk = k * k * (3 - 2 * k);
@@ -611,6 +614,7 @@ function updateWake(dt) {
     ui.eyes('hidden');
     ui.blur(0);
     game.wakeFired = null;
+    game.wakeHead = null;
     game.state.flags.introDone = true;
     enterPlay();
     onQuestStart(0);
@@ -909,6 +913,7 @@ function setFlashlight(on) {
 }
 
 function interact() {
+  if (player.sitting) { player.standUp(); return; }
   const it = game.focused;
   if (!it) return;
   it.use();
@@ -1014,7 +1019,7 @@ function updatePlay(dt) {
 
   // nearest interactable
   let best = null, bd = 1e9;
-  for (const it of zone.interactables) {
+  for (const it of player.busy ? [] : zone.interactables) {
     if (!it.available()) continue;
     const d = Math.hypot(it.x - player.pos.x, it.z - player.pos.z);
     if (d < it.radius && d < bd) { bd = d; best = it; }
@@ -1022,6 +1027,7 @@ function updatePlay(dt) {
   game.focused = best;
   if (best) tip('interact');
   if (best) ui.setPrompt(best.label(), best.locked ? best.locked() : false);
+  else if (player.sitting) ui.setPrompt('קום');
   else ui.setPrompt(null);
 
   // item glints bob
