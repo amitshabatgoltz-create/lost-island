@@ -224,16 +224,18 @@ export const dirtTex = () => cached('dirt', () => {
 export const rockTex = () => cached('rock', () => {
   const S = 512, { c } = canvas(S);
   const base = tileFbm(S, 4, 6, 41, 0.55), fine = tileFbm(S, 32, 3, 42), lich = tileFbm(S, 12, 3, 43);
-  const { edge } = tileWorley(S, 7, 44);
+  const { edge } = tileWorley(S, 5, 44);
+  const warp = tileFbm(S, 8, 3, 45);
   const id = c.createImageData(S, S), d = id.data, height = new Float32Array(S * S);
   for (let i = 0; i < S * S; i++) {
-    const crack = 1 - Math.min(1, edge[i] / 0.07);
-    const k = 0.72 + base[i] * 0.45 + (fine[i] - 0.5) * 0.2 - crack * 0.45;
+    // thin, broken cracks only (no visible cell pattern)
+    const crack = (1 - Math.min(1, edge[i] / 0.025)) * Math.max(0, warp[i] - 0.45) * 2;
+    const k = 0.7 + base[i] * 0.5 + (fine[i] - 0.5) * 0.22 - crack * 0.3;
     let r = 128 * k, g = 125 * k, b = 118 * k;
     const l = Math.max(0, (lich[i] - 0.62) * 4) * (1 - crack);
     r += (150 - r) * l * 0.5; g += (150 - g) * l * 0.55; b += (90 - b) * l * 0.5;
     d[i * 4] = r; d[i * 4 + 1] = g; d[i * 4 + 2] = b; d[i * 4 + 3] = 255;
-    height[i] = 0.25 + base[i] * 0.5 + (fine[i] - 0.5) * 0.25 - crack * 0.35;
+    height[i] = 0.25 + base[i] * 0.55 + (fine[i] - 0.5) * 0.3 - crack * 0.2;
   }
   c.putImageData(id, 0, 0);
   return finish(c, height, S, S, 3.2);

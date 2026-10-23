@@ -9,7 +9,7 @@ const MOON_DIR = new THREE.Vector3(0.45, 0.62, 0.64).normalize();
 
 const PRESETS = {
   day: {
-    fog: 0xa3bbcf, fogDensity: 0.004, sky: true, hemiSky: 0xa9c6e8, hemiGround: 0x5e4f38, hemi: 0.5,
+    fog: 0x9cb6cc, fogDensity: 0.0036, sky: true, hemiSky: 0xa9c6e8, hemiGround: 0x5e4f38, hemi: 0.5,
     light: 0xffe1bb, lightI: 3.0, dir: SUN_DIR, envI: 0.45, exposure: 0.88, moon: false,
   },
   night: {
@@ -58,9 +58,9 @@ export function createEnvironment(renderer) {
   const sky = new Sky();
   sky.scale.setScalar(3000);
   const su = sky.material.uniforms;
-  su.turbidity.value = 3.2;
-  su.rayleigh.value = 2.0;
-  su.mieCoefficient.value = 0.004;
+  su.turbidity.value = 2.2;
+  su.rayleigh.value = 2.6;
+  su.mieCoefficient.value = 0.0025;
   su.mieDirectionalG.value = 0.82;
   su.sunPosition.value.copy(SUN_DIR).multiplyScalar(1000);
   sky.userData.shared = true;

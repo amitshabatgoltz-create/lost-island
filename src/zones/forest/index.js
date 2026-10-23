@@ -8,7 +8,7 @@ import {
   palmGeometries, jungleTreeGeometries, bushGeometry, fernGeometry, grassGeometry, softSprite,
 } from '../shared.js';
 import { canvasTex } from '../../items.js';
-import { terrainMaterial, triplanar, vegetationMaterials, bakeContactShade } from '../../gfx/materials.js';
+import { terrainMaterial, triplanar, vegetationMaterials, bakeContactShade, shadeSpotsFromColliders } from '../../gfx/materials.js';
 import { litterTex, mossTex, dirtTex, rockTex } from '../../gfx/textures.js';
 import {
   buildTransmitter, buildSupplyDrop, buildTent, buildCabin, buildTable, buildCampProps, buildStringLights, buildLocker,
@@ -40,7 +40,8 @@ export async function build(env, api, onProgress = () => {}) {
   const ctx = { group, colliders, occluders, heightAt: terrainHeight };
 
   onProgress(0.1, 'פני השטח של היער');
-  group.add(buildTerrainMesh());
+  const terrain = buildTerrainMesh();
+  group.add(terrain);
   buildStream(ctx, streamZ, streamLevel, shared);
   bridgeHeight = buildBridge(ctx, FL.bridge, terrainHeight);
   await yieldFrame();
@@ -98,6 +99,7 @@ export async function build(env, api, onProgress = () => {}) {
   await yieldFrame();
   onProgress(0.75, 'צמחייה');
   const smallChunks = buildVegetation(ctx, rnd, { trunkMat, palmTrunkMat, canopyMat, smallMat, palmLeafMat }, cabin);
+  bakeContactShade(terrain, shadeSpotsFromColliders(colliders));
   await yieldFrame();
 
   onProgress(0.88, 'אורות רחוקים');
@@ -243,7 +245,7 @@ function buildTerrainMesh() {
 // ---------------------------------------------------------------- rocks
 function buildRocks(ctx, rnd) {
   const variants = [1, 2, 3].map((seed) => {
-    const g = new THREE.IcosahedronGeometry(1, 2);
+    const g = new THREE.IcosahedronGeometry(1, 3);
     const p = g.attributes.position;
     for (let i = 0; i < p.count; i++) {
       const x = p.getX(i), y = p.getY(i), z = p.getZ(i);

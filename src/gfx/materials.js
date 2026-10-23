@@ -204,3 +204,22 @@ export function vegetationMaterials(shared) {
     smallMat: foliageMaterial(shared, 0.08, { translucency: 0.3, roughness: 0.85 }),
   };
 }
+
+// contact-shade spots derived from a zone's colliders (trees, rocks, wreckage)
+export function shadeSpotsFromColliders(colliders) {
+  const spots = [];
+  for (const c of colliders) {
+    if (c.type === 'circle') {
+      spots.push({ x: c.x, z: c.z, r: c.r * 2.4 + 0.5, k: 0.5 });
+      if (c.r > 0.35 && c.r < 1.2) spots.push({ x: c.x, z: c.z, r: 4.2, k: 0.16 }); // canopy shade
+    } else if (c.type === 'box') {
+      const cs = Math.cos(c.rot || 0), sn = Math.sin(c.rot || 0);
+      const n = Math.max(1, Math.round(c.hw / 1.2));
+      for (let i = -n; i <= n; i++) {
+        const lx = (i / n) * c.hw;
+        spots.push({ x: c.x + lx * cs, z: c.z - lx * sn, r: c.hd * 1.6 + 0.8, k: 0.42 });
+      }
+    }
+  }
+  return spots;
+}

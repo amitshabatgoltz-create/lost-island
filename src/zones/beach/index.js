@@ -11,8 +11,8 @@ import {
 import { createBeachInteractions } from './interactions.js';
 import { buildBaseCamp } from './basecamp.js';
 import { RESOURCE_NODES } from '../../data/resources.js';
-import { terrainMaterial, bakeContactShade, vegetationMaterials, triplanar } from '../../gfx/materials.js';
-import { sandTex, grassTex, dirtTex, rockTex } from '../../gfx/textures.js';
+import { terrainMaterial, bakeContactShade, vegetationMaterials, triplanar, scaleUV, shadeSpotsFromColliders } from '../../gfx/materials.js';
+import { sandTex, grassTex, dirtTex, rockTex, rippleNormal, panelTex } from '../../gfx/textures.js';
 
 const yieldFrame = () => new Promise((r) => setTimeout(r, 0));
 
@@ -26,7 +26,8 @@ export async function build(env, api, onProgress = () => {}) {
   const rnd = mulberry32(1337);
 
   onProgress(0.15, 'פני השטח של האי');
-  group.add(buildTerrain());
+  const terrain = buildTerrain();
+  group.add(terrain);
   await yieldFrame();
 
   onProgress(0.3, 'הים');
@@ -44,6 +45,8 @@ export async function build(env, api, onProgress = () => {}) {
   onProgress(0.68, 'ג׳ונגל וצמחייה');
   buildVegetation(group, colliders, shared, rnd);
   await yieldFrame();
+
+  bakeContactShade(terrain, shadeSpotsFromColliders(colliders));
 
   onProgress(0.82, 'האות');
   const signal = buildSignalMast(group);
@@ -189,11 +192,13 @@ function buildSea(shared) {
   const geo = new THREE.PlaneGeometry(900, 900, 160, 160);
   geo.rotateX(-Math.PI / 2);
   geo.translate(0, 0, 120);
+  const ripple = rippleNormal();
   const mat = new THREE.MeshStandardMaterial({
-    color: 0x0f4d5e, roughness: 0.07, metalness: 0.05, transparent: true, opacity: 0.9, envMapIntensity: 1.3,
+    color: 0x0a3a50, roughness: 0.16, metalness: 0.0, transparent: true, opacity: 0.94, envMapIntensity: 1.25,
   });
   mat.onBeforeCompile = (sh) => {
     sh.uniforms.uTime = shared.time;
+    sh.uniforms.tRipple = { value: ripple };
     const fn = `
       uniform float uTime;
       varying vec3 vWp;
@@ -209,20 +214,35 @@ function buildSea(shared) {
       .replace('#include <begin_vertex>', `vec3 transformed = vec3(position); transformed.y += wH(position.xz); vWp = (modelMatrix * vec4(transformed,1.0)).xyz;`);
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', `#include <common>
-        uniform float uTime; varying vec3 vWp;
+        uniform float uTime; varying vec3 vWp; uniform sampler2D tRipple;
         float shoreZ(float x){ return 28.0 + 7.0*sin(x*0.045+1.3) + 3.0*sin(x*0.12); }`)
       .replace('#include <color_fragment>', `#include <color_fragment>
         float dd = vWp.z - shoreZ(vWp.x);
         float edgeFade = 1.0 - smoothstep(70.0, 85.0, abs(vWp.x));
-        diffuseColor.rgb = mix(vec3(0.16,0.62,0.62), diffuseColor.rgb, smoothstep(0.0, 22.0, dd));
-        float wv = sin(dd*1.3 - uTime*1.5 + sin(vWp.x*0.13)*2.0);
-        float brk = 0.65 + 0.35*sin(vWp.x*1.1 + vWp.z*0.7 + uTime*0.8);
-        float foam = smoothstep(0.82, 1.0, wv) * (1.0 - smoothstep(0.0, 10.0, dd)) * brk;
-        foam += (1.0 - smoothstep(0.0, 1.6, dd)) * 0.75;
+        // two scrolling ripple layers: small chop on top of the big vertex waves
+        vec2 rp = vWp.xz;
+        vec3 r1 = texture2D(tRipple, rp * 0.045 + vec2(uTime * 0.012, uTime * 0.02)).xyz * 2.0 - 1.0;
+        vec3 r2 = texture2D(tRipple, rp * 0.11 + vec2(-uTime * 0.018, uTime * 0.011)).xyz * 2.0 - 1.0;
+        vec2 rip = (r1.xy + r2.xy * 0.6);
+        // colour by depth: clear turquoise over the sand, teal, then deep ocean blue
+        float depthK = smoothstep(0.0, 26.0, dd);
+        vec3 shallow = vec3(0.16, 0.56, 0.52), mid = vec3(0.04, 0.33, 0.40);
+        diffuseColor.rgb = mix(mix(shallow, mid, smoothstep(0.0, 8.0, dd)), diffuseColor.rgb, depthK);
+        // broken surf lines rolling in, and a soft foam edge on the sand
+        float wv = sin(dd*1.3 - uTime*1.5 + sin(vWp.x*0.13)*2.0 + rip.x * 1.5);
+        float brk = smoothstep(0.1, 0.7, 0.5 + 0.5*sin(vWp.x*0.9 + vWp.z*0.6 + uTime*0.7) + rip.y);
+        float foam = smoothstep(0.86, 1.0, wv) * (1.0 - smoothstep(0.0, 9.0, dd)) * brk * 0.8;
+        foam += (1.0 - smoothstep(0.0, 1.2 + rip.x * 0.6, dd)) * smoothstep(-0.3, 0.6, rip.y + 0.35) * 0.7;
         foam = clamp(foam * edgeFade, 0.0, 1.0);
-        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.93,0.95,0.95), foam);
-        diffuseColor.a = mix(mix(0.55, opacity, smoothstep(0.0, 8.0, dd)), 0.95, foam);
-      `);
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.9,0.93,0.93), foam);
+        diffuseColor.a = mix(mix(0.42, opacity, smoothstep(0.0, 10.0, dd)), 0.92, foam);`)
+      .replace('#include <roughnessmap_fragment>', `float roughnessFactor = mix(roughness, 0.6, foam);`)
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+        {
+          vec3 nW = normalize((inverse(viewMatrix) * vec4(normal, 0.0)).xyz);
+          nW = normalize(nW + vec3(rip.x, 0.0, -rip.y) * 0.35 * (1.0 - foam));
+          normal = normalize((viewMatrix * vec4(nW, 0.0)).xyz);
+        }`);
   };
   const mesh = new THREE.Mesh(geo, mat);
   mesh.receiveShadow = true;
@@ -242,7 +262,12 @@ function placeOnGround(obj, x, z, sink = 0) {
 // =====================================================================
 // Wreckage
 // =====================================================================
-const metalWhite = () => new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.5, metalness: 0.35 });
+// painted aircraft aluminium: panel seams, rivets, grime streaks; tinted by the per-vertex livery and burn colours
+const skin = (params = {}) => {
+  const t = panelTex();
+  return new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.42, metalness: 0.18, map: t.map, normalMap: t.normalMap, normalScale: new THREE.Vector2(0.9, 0.9), ...params });
+};
+const metalWhite = () => skin({ vertexColors: true });
 
 function buildFuselage() {
   const R = 2.3, L = 20;
@@ -277,7 +302,7 @@ function buildFuselage() {
     g.computeVertexNormals();
     return g;
   }
-  const outer = new THREE.Mesh(shell(R, false), metalWhite());
+  const outer = new THREE.Mesh(scaleUV(shell(R, false), 7, 10), metalWhite());
   const innerMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, side: THREE.BackSide });
   const inner = new THREE.Mesh(shell(R * 0.965, true), innerMat);
   group.add(outer, inner);
@@ -330,11 +355,11 @@ function buildWing() {
   const geo = new THREE.ExtrudeGeometry(shape, { depth: 0.38, bevelEnabled: true, bevelSize: 0.08, bevelThickness: 0.1, bevelSegments: 2, steps: 1 });
   geo.rotateX(-Math.PI / 2);
   geo.translate(-6.5, 0, 0);
-  const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: 0xbfc4c9, roughness: 0.45, metalness: 0.5 }));
+  const m = new THREE.Mesh(scaleUV(geo, 0.45, 0.45), skin({ color: 0xc9cdd2, roughness: 0.4, metalness: 0.3 }));
   const g = new THREE.Group();
   g.add(m);
   // flap hanging off
-  const flap = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.1, 0.9), new THREE.MeshStandardMaterial({ color: 0xa9aeb3, roughness: 0.5, metalness: 0.5 }));
+  const flap = new THREE.Mesh(scaleUV(new THREE.BoxGeometry(3.4, 0.1, 0.9), 1.6, 0.5), skin({ color: 0xb4b9be, roughness: 0.45, metalness: 0.3 }));
   flap.position.set(-1, 0.1, 3.0);
   flap.rotation.set(0.5, 0.1, 0.05);
   g.add(flap);
@@ -369,7 +394,7 @@ function logoTexture() {
 
 function buildTail() {
   const g = new THREE.Group();
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(2.1, 0.55, 9, 30, 6, true), new THREE.MeshStandardMaterial({ color: 0xe8e8e6, roughness: 0.5, metalness: 0.3, side: THREE.DoubleSide }));
+  const body = new THREE.Mesh(scaleUV(new THREE.CylinderGeometry(2.1, 0.55, 9, 36, 8, true), 4, 4.5), skin({ color: 0xeeeeea, side: THREE.DoubleSide }));
   body.geometry.rotateZ(Math.PI / 2);
   // jagged front edge
   const p = body.geometry.attributes.position;
@@ -384,7 +409,7 @@ function buildTail() {
   finShape.lineTo(4.4, 5.6);
   finShape.lineTo(2.2, 5.6);
   finShape.closePath();
-  const fin = new THREE.Mesh(new THREE.ExtrudeGeometry(finShape, { depth: 0.3, bevelEnabled: false }), new THREE.MeshStandardMaterial({ color: 0x16365f, roughness: 0.5, metalness: 0.3 }));
+  const fin = new THREE.Mesh(scaleUV(new THREE.ExtrudeGeometry(finShape, { depth: 0.3, bevelEnabled: true, bevelSize: 0.05, bevelThickness: 0.05, bevelSegments: 2 }), 0.45, 0.45), skin({ color: 0x1d4373, roughness: 0.38 }));
   fin.position.set(0.8, 0.9, -0.15);
   g.add(fin);
   const logoMat = new THREE.MeshStandardMaterial({ map: logoTexture(), roughness: 0.5 });
@@ -394,7 +419,7 @@ function buildTail() {
     if (s < 0) logo.rotation.y = Math.PI;
     g.add(logo);
   }
-  const stab = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.18, 7.5), new THREE.MeshStandardMaterial({ color: 0xd5d6d8, roughness: 0.5, metalness: 0.4 }));
+  const stab = new THREE.Mesh(scaleUV(new THREE.BoxGeometry(2.6, 0.18, 7.5), 1.3, 3.7), skin({ color: 0xdcdde0 }));
   stab.position.set(2.6, 0.3, 0);
   g.add(stab);
   return shadowAll(g);
@@ -402,7 +427,7 @@ function buildTail() {
 
 function buildEngine() {
   const g = new THREE.Group();
-  const nacelle = new THREE.Mesh(new THREE.CylinderGeometry(1.15, 0.95, 3.2, 28, 1, true), new THREE.MeshStandardMaterial({ color: 0x8d9298, roughness: 0.45, metalness: 0.6, side: THREE.DoubleSide }));
+  const nacelle = new THREE.Mesh(scaleUV(new THREE.CylinderGeometry(1.15, 0.95, 3.2, 36, 1, true), 3.5, 1.6), skin({ color: 0x9aa0a6, roughness: 0.35, metalness: 0.55, side: THREE.DoubleSide }));
   nacelle.rotation.z = Math.PI / 2;
   const fan = new THREE.Mesh(new THREE.CircleGeometry(1.05, 24), new THREE.MeshStandardMaterial({ color: 0x1d1f22, roughness: 0.6, metalness: 0.5 }));
   fan.position.x = 1.2;
@@ -500,8 +525,8 @@ function buildWreck(scene, colliders, occluders, updaters, rnd) {
 
   // cargo container near the tail ("cache")
   const cont = new THREE.Group();
-  const cmat = new THREE.MeshStandardMaterial({ color: 0x9aa1a8, roughness: 0.55, metalness: 0.6 });
-  const box = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.9, 1.9), cmat);
+  const cmat = skin({ color: 0xa8aeb4, roughness: 0.5, metalness: 0.45 });
+  const box = new THREE.Mesh(scaleUV(new THREE.BoxGeometry(2.4, 1.9, 1.9), 1.2, 1), cmat);
   box.position.y = 0.95;
   const door = new THREE.Mesh(new THREE.BoxGeometry(0.06, 1.7, 1.7), new THREE.MeshStandardMaterial({ color: 0x5d6a74, roughness: 0.6, metalness: 0.4 }));
   door.position.set(1.4, 0.85, 0.75);
@@ -528,8 +553,8 @@ function buildWreck(scene, colliders, occluders, updaters, rnd) {
   }
 
   // bent panels & shards
-  const panelMat = new THREE.MeshStandardMaterial({ color: 0xd8dadc, roughness: 0.5, metalness: 0.4, side: THREE.DoubleSide });
-  const darkMat = new THREE.MeshStandardMaterial({ color: 0x3b3e42, roughness: 0.7, metalness: 0.4, side: THREE.DoubleSide });
+  const panelMat = skin({ color: 0xe2e3e4, side: THREE.DoubleSide });
+  const darkMat = skin({ color: 0x4a4d52, roughness: 0.6, metalness: 0.35, side: THREE.DoubleSide });
   for (let i = 0; i < 26; i++) {
     const a = rnd() * Math.PI * 2, r = 4 + rnd() * 22;
     const x = 6 + Math.cos(a) * r * 1.3, z = 2 + Math.sin(a) * r * 0.8;
@@ -578,7 +603,7 @@ function buildWreck(scene, colliders, occluders, updaters, rnd) {
 // =====================================================================
 function buildRocks(scene, colliders, occluders, rnd) {
   const variants = [1, 2, 3].map((seed) => {
-    const g = new THREE.IcosahedronGeometry(1, 2);
+    const g = new THREE.IcosahedronGeometry(1, 3);
     const p = g.attributes.position;
     for (let i = 0; i < p.count; i++) {
       const x = p.getX(i), y = p.getY(i), z = p.getZ(i);

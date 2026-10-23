@@ -3,7 +3,10 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { fbm, mulberry32 } from '../noise.js';
 import { toAtlas, scaleUV } from '../gfx/materials.js';
-import { ATLAS } from '../gfx/textures.js';
+import { ATLAS, fabricTex } from '../gfx/textures.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+
+const roundedBox = (w, h, d, r) => scaleUV(new RoundedBoxGeometry(w, h, d, 2, r), 3, 3);
 
 export function grainTexture() {
   const s = 256, cv = document.createElement('canvas');
@@ -59,11 +62,12 @@ export function shadowAll(obj, cast = true, receive = true) {
 
 export function makeSeat(color = 0x2a4a7a) {
   const g = new THREE.Group();
-  const fabric = new THREE.MeshStandardMaterial({ color, roughness: 0.95 });
+  const fab = fabricTex();
+  const fabric = new THREE.MeshStandardMaterial({ color, roughness: 0.95, map: fab.map, normalMap: fab.normalMap });
   const frame = new THREE.MeshStandardMaterial({ color: 0x8a8f96, roughness: 0.4, metalness: 0.6 });
-  const base = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.14, 0.5), fabric);
+  const base = new THREE.Mesh(roundedBox(0.5, 0.14, 0.5, 0.04), fabric);
   base.position.y = 0.45;
-  const back = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.75, 0.12), fabric);
+  const back = new THREE.Mesh(roundedBox(0.5, 0.75, 0.12, 0.04), fabric);
   back.position.set(0, 0.85, -0.22);
   back.rotation.x = -0.12;
   const head = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.18, 0.1), new THREE.MeshStandardMaterial({ color: 0xd8d4c8, roughness: 0.9 }));
@@ -159,14 +163,14 @@ function shadeVertices(geo, fn) {
 
 // leaf crown: dark core blob + leaf-cluster cards on its surface
 function crown(parts, cx, cy, cz, radius, cards, cardSize, r, centre, tint = [1, 1, 1]) {
-  const core = new THREE.IcosahedronGeometry(radius * 0.72, 1);
+  const core = new THREE.IcosahedronGeometry(radius * 0.6, 1);
   jitterGeometry(core, radius * 0.18, 2, cx * 3 + cz);
   core.scale(1, 0.78, 1);
   core.translate(cx, cy, cz);
   toAtlas(core, ATLAS.leaf);
   const uv = core.attributes.uv;
   for (let i = 0; i < uv.count; i++) uv.setXY(i, ATLAS.leaf[0] + 0.25, ATLAS.leaf[1] + 0.25); // solid centre of the leaf cell
-  shadeVertices(core, () => [0.55 * tint[0], 0.6 * tint[1], 0.55 * tint[2]]);
+  shadeVertices(core, () => [0.85 * tint[0], 0.9 * tint[1], 0.85 * tint[2]]);
   parts.push(core);
   for (let k = 0; k < cards; k++) {
     // direction biased upward and outward
