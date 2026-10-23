@@ -81,7 +81,7 @@ export function clearState() {
 
 export function loadSettings() {
   // navAssist replaces the old always-on `marker` setting; old stored values are ignored so the compass starts off
-  const def = { sens: 1, volume: 0.8, invertY: false, shadows: true, navAssist: false, introSeen: false };
+  const def = { sens: 1, volume: 0.8, invertY: false, shadows: true, hq: true, navAssist: false, introSeen: false };
   try {
     return { ...def, ...(JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}) };
   } catch (e) {

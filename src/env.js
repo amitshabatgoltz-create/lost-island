@@ -3,32 +3,65 @@
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 
-export const SUN_DIR = new THREE.Vector3(-0.38, 0.17, 0.91).normalize();
+// late-morning sun from the south-west: high enough to model shapes, low enough for long soft shadows
+export const SUN_DIR = new THREE.Vector3(-0.55, 0.52, 0.65).normalize();
 const MOON_DIR = new THREE.Vector3(0.45, 0.62, 0.64).normalize();
 
 const PRESETS = {
   day: {
-    fog: 0xa9b4b8, fogDensity: 0.0058, sky: true, hemiSky: 0xbfd4ee, hemiGround: 0x8a7457, hemi: 0.9,
-    light: 0xffd2a1, lightI: 2.6, dir: SUN_DIR, envI: 0.55, exposure: 0.92, moon: false,
+    fog: 0xa3bbcf, fogDensity: 0.004, sky: true, hemiSky: 0xa9c6e8, hemiGround: 0x5e4f38, hemi: 0.5,
+    light: 0xffe1bb, lightI: 3.0, dir: SUN_DIR, envI: 0.45, exposure: 0.88, moon: false,
   },
   night: {
-    fog: 0x182638, fogDensity: 0.012, sky: false, hemiSky: 0x7088b8, hemiGround: 0x2a2a30, hemi: 0.95,
-    light: 0xa9c0f0, lightI: 1.25, dir: MOON_DIR, envI: 0.12, exposure: 1.3, moon: true,
+    fog: 0x15202e, fogDensity: 0.012, sky: false, hemiSky: 0x5a74a8, hemiGround: 0x1c1c22, hemi: 0.6,
+    light: 0x9fb8ec, lightI: 1.15, dir: MOON_DIR, envI: 0.1, exposure: 1.12, moon: true,
   },
 };
 
+// Height fog: exponential fog that is thicker near the ground and thins out with altitude, so distant
+// hills and the sky keep their contrast while the low jungle and the sea horizon get atmospheric depth.
+THREE.ShaderChunk.fog_pars_vertex = `#ifdef USE_FOG
+  varying float vFogDepth;
+  varying float vFogY;
+#endif`;
+THREE.ShaderChunk.fog_vertex = `#ifdef USE_FOG
+  vFogDepth = - mvPosition.z;
+  vFogY = (transpose(mat3(viewMatrix)) * (mvPosition.xyz - viewMatrix[3].xyz)).y;
+#endif`;
+THREE.ShaderChunk.fog_pars_fragment = `#ifdef USE_FOG
+  uniform vec3 fogColor;
+  varying float vFogDepth;
+  varying float vFogY;
+  #ifdef FOG_EXP2
+    uniform float fogDensity;
+  #else
+    uniform float fogNear;
+    uniform float fogFar;
+  #endif
+#endif`;
+THREE.ShaderChunk.fog_fragment = `#ifdef USE_FOG
+  #ifdef FOG_EXP2
+    float fogH = max(0.5 * (vFogY + cameraPosition.y), 0.0);
+    float fogD = fogDensity * (0.35 + 0.65 * exp(-fogH * 0.06));
+    float fogFactor = 1.0 - exp(- fogD * fogD * vFogDepth * vFogDepth);
+  #else
+    float fogFactor = smoothstep(fogNear, fogFar, vFogDepth);
+  #endif
+  gl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor, fogFactor);
+#endif`;
+
 export function createEnvironment(renderer) {
   const scene = new THREE.Scene();
-  scene.fog = new THREE.FogExp2(0xa9b4b8, 0.0058);
-  scene.background = new THREE.Color(0xa9b4b8);
+  scene.fog = new THREE.FogExp2(PRESETS.day.fog, PRESETS.day.fogDensity);
+  scene.background = new THREE.Color(PRESETS.day.fog);
 
   const sky = new Sky();
   sky.scale.setScalar(3000);
   const su = sky.material.uniforms;
-  su.turbidity.value = 7;
-  su.rayleigh.value = 1.6;
-  su.mieCoefficient.value = 0.006;
-  su.mieDirectionalG.value = 0.86;
+  su.turbidity.value = 3.2;
+  su.rayleigh.value = 2.0;
+  su.mieCoefficient.value = 0.004;
+  su.mieDirectionalG.value = 0.82;
   su.sunPosition.value.copy(SUN_DIR).multiplyScalar(1000);
   sky.userData.shared = true;
   scene.add(sky);
@@ -47,15 +80,15 @@ export function createEnvironment(renderer) {
   scene.environment = envTex;
   scene.environmentIntensity = 0.55;
 
-  const hemi = new THREE.HemisphereLight(0xbfd4ee, 0x8a7457, 0.9);
+  const hemi = new THREE.HemisphereLight(PRESETS.day.hemiSky, PRESETS.day.hemiGround, PRESETS.day.hemi);
   scene.add(hemi);
-  const sun = new THREE.DirectionalLight(0xffd2a1, 2.6);
+  const sun = new THREE.DirectionalLight(PRESETS.day.light, PRESETS.day.lightI);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
   const sc = sun.shadow.camera;
-  sc.left = -42; sc.right = 42; sc.top = 42; sc.bottom = -42; sc.near = 1; sc.far = 220;
-  sun.shadow.bias = -0.0004;
-  sun.shadow.normalBias = 0.04;
+  sc.left = -48; sc.right = 48; sc.top = 48; sc.bottom = -48; sc.near = 1; sc.far = 260;
+  sun.shadow.bias = -0.00025;
+  sun.shadow.normalBias = 0.05;
   scene.add(sun, sun.target);
 
   // moon + stars follow the camera so they never hit the far plane
@@ -92,6 +125,7 @@ export function createEnvironment(renderer) {
   scene.add(nightSky);
 
   let preset = PRESETS.day;
+  const UP = new THREE.Vector3(0, 1, 0), lsRight = new THREE.Vector3(), lsUp = new THREE.Vector3(), snapped = new THREE.Vector3(), center = new THREE.Vector3(), camDir = new THREE.Vector3();
   const shared = { time: { value: 0 } };
 
   return {
@@ -114,11 +148,32 @@ export function createEnvironment(renderer) {
       renderer.toneMappingExposure = preset.exposure;
     },
     setShadows(on) { sun.castShadow = on; },
+    // 4096 shadow map on the high setting: crisp contact shadows across the whole 96 m shadow area
+    setShadowQuality(high) {
+      const n = high ? 4096 : 2048;
+      if (sun.shadow.mapSize.x === n) return;
+      sun.shadow.mapSize.set(n, n);
+      if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }
+    },
     update(dt, t, focus, camera) {
       shared.time.value = t;
       const d = preset.dir;
-      sun.position.set(focus.x + d.x * 90, focus.y + d.y * 90, focus.z + d.z * 90);
-      sun.target.position.set(focus.x, focus.y, focus.z);
+      // snap the shadow camera to whole shadow texels so shadow edges do not shimmer while walking
+      const texel = (sc.right - sc.left) / sun.shadow.mapSize.x;
+      // centre the shadow area ahead of the camera, where most of the visible ground is
+      center.copy(focus);
+      if (camera) {
+        camera.getWorldDirection(camDir);
+        camDir.y = 0;
+        if (camDir.lengthSq() > 1e-4) center.addScaledVector(camDir.normalize(), 16);
+      }
+      focus = center;
+      lsRight.crossVectors(UP, d).normalize();
+      lsUp.crossVectors(d, lsRight);
+      const u = focus.dot(lsRight), v = focus.dot(lsUp);
+      snapped.copy(focus).addScaledVector(lsRight, Math.round(u / texel) * texel - u).addScaledVector(lsUp, Math.round(v / texel) * texel - v);
+      sun.position.copy(snapped).addScaledVector(d, 120);
+      sun.target.position.copy(snapped);
       if (nightSky.visible && camera) {
         nightSky.position.copy(camera.position);
         moon.position.copy(MOON_DIR).multiplyScalar(110);

@@ -5,12 +5,14 @@ import { fbm, mulberry32, smoothstep } from '../../noise.js';
 import { heightAt, shoreZ, distToPaths, inlandDist, BOUNDS } from './terrain.js';
 import { LAYOUT, ITEM_SPOTS } from './layout.js';
 import {
-  grainTexture, jitterGeometry, colorize, merge, shadowAll, makeSeat, makeSuitcaseMesh, softSprite,
-  stencilTexture, swayMaterial, palmGeometries, jungleTreeGeometries, bushGeometry, fernGeometry, grassGeometry,
+  jitterGeometry, colorize, merge, shadowAll, makeSeat, makeSuitcaseMesh, softSprite,
+  stencilTexture, palmGeometries, jungleTreeGeometries, bushGeometry, fernGeometry, grassGeometry,
 } from '../shared.js';
 import { createBeachInteractions } from './interactions.js';
 import { buildBaseCamp } from './basecamp.js';
 import { RESOURCE_NODES } from '../../data/resources.js';
+import { terrainMaterial, bakeContactShade, vegetationMaterials, triplanar } from '../../gfx/materials.js';
+import { sandTex, grassTex, dirtTex, rockTex } from '../../gfx/textures.js';
 
 const yieldFrame = () => new Promise((r) => setTimeout(r, 0));
 
@@ -126,38 +128,53 @@ export async function build(env, api, onProgress = () => {}) {
 // Terrain
 // =====================================================================
 function buildTerrain() {
-  const W = 270, D = 250, SX = 180, SZ = 166;
+  const W = 270, D = 250, SX = 216, SZ = 200;
   const geo = new THREE.PlaneGeometry(W, D, SX, SZ);
   geo.rotateX(-Math.PI / 2);
   const cx = 0, cz = -65;
   geo.translate(cx, 0, cz);
   const pos = geo.attributes.position;
-  const colors = new Float32Array(pos.count * 3);
-  const c = new THREE.Color();
-  const sand = new THREE.Color(0xd9c7a0), wetSand = new THREE.Color(0x9c8a6c), grass = new THREE.Color(0x56702e);
-  const jungle = new THREE.Color(0x34501f), dirt = new THREE.Color(0x76603f), rock = new THREE.Color(0x6e6a62);
+  // splat = texture layer weights (sand, grass, dirt, rock); color = large-scale tint; wet = darker, glossier
+  const colors = new Float32Array(pos.count * 3), splat = new Float32Array(pos.count * 4), wet = new Float32Array(pos.count);
+  const w = [0, 0, 0, 0];
+  const lerpTo = (k, ch) => { for (let j = 0; j < 4; j++) w[j] += ((j === ch ? 1 : 0) - w[j]) * k; };
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i), z = pos.getZ(i);
     const h = heightAt(x, z);
     pos.setY(i, h);
     const d = inlandDist(x, z);
-    const n = fbm(x * 0.08, z * 0.08, 3);
-    if (d < 1.5) c.copy(wetSand);
-    else c.copy(wetSand).lerp(sand, smoothstep(1.5, 4, d));
-    c.lerp(grass, smoothstep(17, 30, d + (n - 0.5) * 10));
-    c.lerp(jungle, smoothstep(40, 65, d));
+    const n = fbm(x * 0.08, z * 0.08, 3), n2 = fbm(x * 0.021 + 7, z * 0.021, 3);
+    w[0] = 1; w[1] = w[2] = w[3] = 0;
+    const grassK = smoothstep(15, 28, d + (n - 0.5) * 12);
+    lerpTo(grassK, 1);
     const pd = distToPaths(x, z);
-    if (d > 6) c.lerp(dirt, (1 - smoothstep(1.2, 2.6, pd)) * 0.85);
+    if (d > 6) lerpTo((1 - smoothstep(0.7, 2.2, pd + (n - 0.5) * 1.2)) * 0.9 * smoothstep(6, 16, d), 2);
     // steep slopes become rock
     const slope = Math.abs(heightAt(x + 1, z) - h) + Math.abs(heightAt(x, z + 1) - h);
-    c.lerp(rock, smoothstep(0.55, 1.1, slope));
-    const v = 0.9 + n * 0.2;
-    colors[i * 3] = c.r * v; colors[i * 3 + 1] = c.g * v; colors[i * 3 + 2] = c.b * v;
+    lerpTo(smoothstep(0.5, 1.0, slope), 3);
+    splat.set(w, i * 4);
+    wet[i] = d < 0 ? 1 : 1 - smoothstep(0.4, 3.2, d);
+    // tint: dry yellowish grass near the sand, deep green jungle floor, darker sea bed
+    let r = 1, g = 1, b = 1;
+    const v = 0.86 + n2 * 0.28;
+    const dry = grassK * (1 - smoothstep(26, 40, d));
+    r *= 1 + dry * 0.12; b *= 1 - dry * 0.18;
+    const jungle = smoothstep(38, 62, d);
+    r *= 1 - jungle * 0.32; g *= 1 - jungle * 0.18; b *= 1 - jungle * 0.3;
+    if (d < 0) { const deep = Math.min(1, -d / 14); r *= 1 - deep * 0.55; g *= 1 - deep * 0.35; b *= 1 - deep * 0.25; }
+    colors[i * 3] = r * v; colors[i * 3 + 1] = g * v; colors[i * 3 + 2] = b * v;
   }
   geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  geo.setAttribute('splat', new THREE.BufferAttribute(splat, 4));
+  geo.setAttribute('wet', new THREE.BufferAttribute(wet, 1));
   geo.computeVertexNormals();
 
-  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.96, metalness: 0, map: grainTexture() });
+  const mat = terrainMaterial([
+    { tex: sandTex(), scale: 1 / 4, rough: 0.93 },
+    { tex: grassTex(), scale: 1 / 2.6, rough: 0.96 },
+    { tex: dirtTex(), scale: 1 / 3.2, rough: 0.95 },
+    { tex: rockTex(), scale: 1 / 7, rough: 0.82 },
+  ]);
   const mesh = new THREE.Mesh(geo, mat);
   mesh.receiveShadow = true;
   mesh.name = 'terrain';
@@ -571,7 +588,7 @@ function buildRocks(scene, colliders, occluders, rnd) {
     g.computeVertexNormals();
     return g;
   });
-  const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, flatShading: true });
+  const mat = triplanar(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85 }), rockTex(), 0.35, { normalStrength: 1.2 });
   const placements = [];
   const add = (x, z, s, sink = 0.35, collide = true) => placements.push({ x, z, s, sink, collide });
 
@@ -614,8 +631,8 @@ function buildRocks(scene, colliders, occluders, rnd) {
       v.set(p.x, heightAt(p.x, p.z) - p.sink * p.s * 0.5, p.z);
       m4.compose(v, q, sc);
       im.setMatrixAt(i, m4);
-      const g = 0.27 + rnd() * 0.13;
-      col.setRGB(g, g * 0.97, g * 0.92);
+      const g = 0.8 + rnd() * 0.3;
+      col.setRGB(g, g * 0.96, g * 0.9);
       im.setColorAt(i, col);
       if (p.collide && p.s > 0.55) colliders.push({ type: 'circle', x: p.x, z: p.z, r: p.s * 0.92 });
     });
@@ -651,10 +668,7 @@ function buildVegetation(scene, colliders, shared, rnd) {
   };
   const inPlay = (x, z) => x > BOUNDS.minX - 5 && x < BOUNDS.maxX + 5 && z > BOUNDS.minZ - 5;
 
-  const trunkMat = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.95 });
-  const palmLeafMat = swayMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.8, side: THREE.DoubleSide }, shared, 0.045);
-  const canopyMat = swayMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.9, flatShading: true }, shared, 0.025);
-  const smallMat = swayMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.9, side: THREE.DoubleSide }, shared, 0.08);
+  const { trunkMat, palmTrunkMat, palmLeafMat, canopyMat, smallMat } = vegetationMaterials(shared);
 
   // --- sample positions
   const palms = [], trees = [[], [], []], bushes = [], ferns = [], grass = [];
@@ -706,7 +720,7 @@ function buildVegetation(scene, colliders, shared, rnd) {
 
   const palm = palmGeometries();
   const palmSet = place(palms, { scale: [0.85, 1.25], collide: 0.33, sink: 0.1 });
-  addInstanced(palm.trunk, trunkMat, palmSet, true);
+  addInstanced(palm.trunk, palmTrunkMat, palmSet, true);
   addInstanced(palm.leaves, palmLeafMat, palmSet, true);
 
   trees.forEach((list, i) => {

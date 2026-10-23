@@ -1059,6 +1059,7 @@ export function buildGiantTrees(ctx, spots, canopyMat, trunkMat, jungleTreeGeome
   const rootGeo = new THREE.ConeGeometry(0.5, 2.6, 4);
   rootGeo.rotateZ(-Math.PI / 2); // apex points outward, wide base at the trunk
   rootGeo.scale(1, 1, 0.25);
+  rootGeo.setAttribute('color', new THREE.Float32BufferAttribute(new Array(rootGeo.attributes.position.count * 3).fill(0.75), 3));
   for (const [x, z, s] of spots) {
     const y = ctx.heightAt(x, z);
     const trunk = new THREE.Mesh(geos.trunk, trunkMat);
