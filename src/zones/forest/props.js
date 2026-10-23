@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { canvasTex, drawSymbol } from '../../items.js';
 import { softSprite, shadowAll, stencilTexture } from '../shared.js';
 import { mulberry32 } from '../../noise.js';
+import { propMaterial } from '../../gfx/materials.js';
 
 const std = (o) => new THREE.MeshStandardMaterial(o);
 const rot2 = (lx, lz, r) => ({ x: lx * Math.cos(r) + lz * Math.sin(r), z: -lx * Math.sin(r) + lz * Math.cos(r) });
@@ -15,11 +16,12 @@ export function circleCollider(ctx, x, z, r) {
 }
 
 // --------------------------------------------------------------- shared materials
+// textured in object space (gfx/materials.js propMaterial): chipped paint, wood grain, woven canvas
 const MAT = {
-  olive: () => std({ color: 0x4a5236, roughness: 0.8, metalness: 0.3 }),
-  darkMetal: () => std({ color: 0x2c3034, roughness: 0.55, metalness: 0.65 }),
-  wood: () => std({ color: 0x6b5236, roughness: 0.95 }),
-  canvas: () => std({ color: 0x6c6a4e, roughness: 1, side: THREE.DoubleSide }),
+  olive: () => propMaterial('metal', { color: 0x6a7650, roughness: 0.7, metalness: 0.3 }, 2),
+  darkMetal: () => propMaterial('metal', { color: 0x40454a, roughness: 0.5, metalness: 0.6 }, 2.5),
+  wood: () => propMaterial('wood', { color: 0x9c7c5a, roughness: 0.92 }),
+  canvas: () => propMaterial('cloth', { color: 0x83805e, roughness: 1, side: THREE.DoubleSide }, 2),
 };
 
 function plankTexture(base = '#6b5236') {
@@ -265,11 +267,11 @@ export function buildSupplyDrop(ctx, P) {
   const y = heightAt(P.x, P.z);
   const crate = new THREE.Group();
   const stencil = stencilTexture('SUPPLY · NJ');
-  const box = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.9, 1.0), std({ color: 0x55603f, roughness: 0.85 }));
+  const box = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.9, 1.0), propMaterial('metal', { color: 0x6c7852, roughness: 0.75, metalness: 0.25 }, 2));
   box.position.y = 0.45;
   const sten = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.3), std({ map: stencil, transparent: true, roughness: 0.8 }));
   sten.position.set(0, 0.5, 0.505);
-  const lid = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.08, 1.0), std({ color: 0x4a5436, roughness: 0.85 }));
+  const lid = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.08, 1.0), propMaterial('metal', { color: 0x5e6948, roughness: 0.75, metalness: 0.25 }, 2));
   const hasp = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.16, 0.03), std({ color: 0x8a8f96, metalness: 0.8, roughness: 0.3 }));
   hasp.position.set(0, 0.82, 0.515);
   const lock = new THREE.Group();
@@ -321,7 +323,7 @@ export function buildCarvedTree(ctx, C, glyphPath) {
   const { group, heightAt } = ctx;
   const y = heightAt(C.tree.x, C.tree.z);
   const g = new THREE.Group();
-  const bark = std({ color: 0x5a4632, roughness: 1 });
+  const bark = propMaterial('bark', { color: 0x9c8468, roughness: 1 }, 1.2);
   const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.45, 7, 10), bark);
   trunk.position.y = 3.5;
   const crown = new THREE.Mesh(new THREE.IcosahedronGeometry(2.4, 1), std({ color: 0x3a5a22, roughness: 0.9, flatShading: true }));
@@ -382,8 +384,8 @@ function tornAlpha() {
 export function buildTent(ctx, P) {
   const { group, heightAt } = ctx;
   const g = new THREE.Group();
-  const cloth = std({ color: 0x5f6448, roughness: 1, side: THREE.DoubleSide });
-  const torn = std({ color: 0x5f6448, roughness: 1, side: THREE.DoubleSide, alphaMap: tornAlpha(), alphaTest: 0.5 });
+  const cloth = propMaterial('cloth', { color: 0x76805a, roughness: 1, side: THREE.DoubleSide }, 2);
+  const torn = propMaterial('cloth', { color: 0x76805a, roughness: 1, side: THREE.DoubleSide, alphaMap: tornAlpha(), alphaTest: 0.5 }, 2);
   const L = 3.4, Hh = 1.7, Wh = 1.3;
   const slope = Math.hypot(Wh, Hh);
   for (const side of [-1, 1]) {
@@ -408,7 +410,7 @@ export function buildTent(ctx, P) {
     g.add(v);
   }
   // inside: sleeping bag + a single boot
-  const bag = new THREE.Mesh(new THREE.CapsuleGeometry(0.28, 1.4, 4, 8), std({ color: 0x2f4a5f, roughness: 0.95 }));
+  const bag = new THREE.Mesh(new THREE.CapsuleGeometry(0.28, 1.4, 4, 12), propMaterial('cloth', { color: 0x3c5c75, roughness: 0.95 }, 4));
   bag.rotation.x = Math.PI / 2;
   bag.scale.set(1, 1, 0.45);
   bag.position.set(-0.2, 0.13, -0.2);
@@ -431,8 +433,9 @@ export function buildCabin(ctx, P, mapTexture) {
   const plank = plankTexture();
   plank.wrapS = plank.wrapT = THREE.RepeatWrapping;
   plank.repeat.set(2, 1);
-  const wallMat = std({ map: plank, roughness: 0.95, side: THREE.DoubleSide });
-  const floorMat = std({ map: plankTexture('#4d3b28'), roughness: 1 });
+  void plank;
+  const wallMat = propMaterial('wood', { color: 0xa68560, roughness: 0.95, side: THREE.DoubleSide }, 1.2);
+  const floorMat = propMaterial('wood', { color: 0x7a6248, roughness: 1 }, 1.4);
   const occl = [];
   const wall = (w, h, d, x, y, z) => {
     const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), wallMat);
@@ -457,7 +460,7 @@ export function buildCabin(ctx, P, mapTexture) {
   win.rotation.y = Math.PI / 2;
   g.add(win);
   // roof
-  const roofMat = std({ color: 0x3d3a33, roughness: 0.9, metalness: 0.2, side: THREE.DoubleSide });
+  const roofMat = propMaterial('metal', { color: 0x6d675c, roughness: 0.75, metalness: 0.35, side: THREE.DoubleSide }, 1.5);
   for (const s of [-1, 1]) {
     const r = new THREE.Mesh(new THREE.BoxGeometry(W + 0.6, 0.08, D / 2 + 0.6), roofMat);
     r.position.set(0, H + 0.38, s * (D / 4 + 0.05));
@@ -675,7 +678,7 @@ export function buildTable(ctx, P) {
 export function buildCampProps(ctx, L) {
   const { group, heightAt } = ctx;
   const sten = stencilTexture('NJ · FIELD 04');
-  const crateMat = std({ color: 0x55603f, roughness: 0.85 });
+  const crateMat = propMaterial('metal', { color: 0x6c7852, roughness: 0.75, metalness: 0.25 }, 2);
   const stenMat = std({ map: sten, transparent: true, roughness: 0.8 });
   const crates = [[0, 0, 0, 0.2], [1.25, 0.2, 0, -0.1], [0.6, 0.1, 0.9, 0.35], [-1.0, 1.4, 0, 0.6]];
   for (const [dx, dz, dy, r] of crates) {
@@ -857,12 +860,12 @@ export function buildPost(ctx, P, S, R) {
     if (i === 3) { tin.rotation.z = Math.PI / 2; tin.position.y = 0.05; }
     g.add(tin);
   }
-  const blanket = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.06, 0.6), std({ color: 0x4a3328, roughness: 1 }));
+  const blanket = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.06, 0.6), propMaterial('cloth', { color: 0x6a4a3a, roughness: 1 }, 4));
   blanket.position.set(0.9, 0.03, 0.6);
   blanket.rotation.y = 0.4;
   g.add(blanket);
   // board for the route chart
-  const board = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.7, 0.04), std({ color: 0x5a4632, roughness: 1 }));
+  const board = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.7, 0.04), propMaterial('wood', { color: 0x8a7050, roughness: 1 }));
   board.position.set(-1.35, 1.3, -1.15);
   board.rotation.y = 0.5;
   g.add(board);
@@ -1009,7 +1012,7 @@ export function buildStream(ctx, streamZ, streamLevel, shared) {
 
 export function buildBridge(ctx, B, baseHeight) {
   const g = new THREE.Group();
-  const logMat = std({ color: 0x5a4632, roughness: 1 });
+  const logMat = propMaterial('bark', { color: 0x9c8468, roughness: 1 }, 1.2);
   const z0 = B.z - 5.2, z1 = B.z + 5.2;
   const y0 = baseHeight(B.x, z0) + 0.22, y1 = baseHeight(B.x, z1) + 0.22;
   for (const dx of [-0.42, 0, 0.42]) {
@@ -1037,7 +1040,7 @@ export function buildBridge(ctx, B, baseHeight) {
 }
 
 export function buildLogs(ctx, spots) {
-  const mat = std({ color: 0x4d3c2b, roughness: 1 });
+  const mat = propMaterial('bark', { color: 0x9c8468, roughness: 1 }, 1.2);
   const moss = std({ color: 0x3b5a2a, roughness: 1 });
   for (const [x, z, len, rot, r] of spots) {
     const g = new THREE.Group();

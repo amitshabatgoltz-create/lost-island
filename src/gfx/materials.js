@@ -3,7 +3,7 @@
 // - triplanar: world-space texturing for rocks and cliffs (works with instancing)
 // - foliageMaterial: alpha-tested leaf cards with wind sway and back-lit translucency
 import * as THREE from 'three';
-import { foliageAtlas, barkTex, palmBarkTex } from './textures.js';
+import { foliageAtlas, barkTex, palmBarkTex, woodTex, clothTex, metalTex, rockTex } from './textures.js';
 
 // global quality switch read by the shaders (0 = cheap, 1 = full detail)
 export const GFX = { detail: { value: 1 } };
@@ -73,14 +73,15 @@ export function terrainMaterial(layers, { normalStrength = 1 } = {}) {
 }
 
 // ------------------------------------------------------------------ triplanar (rocks, cliffs, instanced or not)
-export function triplanar(mat, tex, scale = 0.5, { normalStrength = 1 } = {}) {
+// object: true samples in the object's own space, so the texture sticks to props that move or open
+export function triplanar(mat, tex, scale = 0.5, { normalStrength = 1, object = false } = {}) {
   const uniforms = { tTA: { value: tex.map }, tTN: { value: tex.normalMap }, uTS: { value: scale }, uTNS: { value: normalStrength } };
   const prev = mat.onBeforeCompile;
   mat.onBeforeCompile = (sh, r) => {
     prev && prev.call(mat, sh, r);
     Object.assign(sh.uniforms, uniforms);
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vTpPos; varying vec3 vTpN;')
+      .replace('#include <common>', '#include <common>\nvarying vec3 vTpPos; varying vec3 vTpN; varying vec3 vTpM0; varying vec3 vTpM1; varying vec3 vTpM2;')
       .replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
         {
           vec4 tpw = vec4(transformed, 1.0);
@@ -89,13 +90,13 @@ export function triplanar(mat, tex, scale = 0.5, { normalStrength = 1 } = {}) {
             tpw = instanceMatrix * tpw;
             tpn = mat3(instanceMatrix) * tpn;
           #endif
-          vTpPos = (modelMatrix * tpw).xyz;
-          vTpN = normalize(mat3(modelMatrix) * tpn);
+          ${object ? 'vTpPos = tpw.xyz; vTpN = normalize(tpn);' : 'vTpPos = (modelMatrix * tpw).xyz; vTpN = normalize(mat3(modelMatrix) * tpn);'}
+          vTpM0 = mat3(modelMatrix)[0]; vTpM1 = mat3(modelMatrix)[1]; vTpM2 = mat3(modelMatrix)[2];
         }`);
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', `#include <common>
         uniform sampler2D tTA, tTN; uniform float uTS, uTNS;
-        varying vec3 vTpPos; varying vec3 vTpN;`)
+        varying vec3 vTpPos; varying vec3 vTpN; varying vec3 vTpM0; varying vec3 vTpM1; varying vec3 vTpM2;`)
       .replace('#include <map_fragment>', `
         vec3 tpN = normalize(vTpN);
         vec3 tpB = pow(abs(tpN), vec3(4.0)); tpB /= dot(tpB, vec3(1.0));
@@ -111,11 +112,12 @@ export function triplanar(mat, tex, scale = 0.5, { normalStrength = 1 } = {}) {
           nY = vec3(nY.xy + tpN.xz, abs(nY.z) * tpN.y);
           nZ = vec3(nZ.xy + tpN.xy, abs(nZ.z) * tpN.z);
           vec3 nW = normalize(nX.zyx * tpB.x + nY.xzy * tpB.y + nZ.xyz * tpB.z);
+          ${object ? 'nW = normalize(mat3(vTpM0, vTpM1, vTpM2) * nW);' : ''}
           normal = normalize((viewMatrix * vec4(nW, 0.0)).xyz);
         }`);
   };
   const prevKey = mat.customProgramCacheKey.bind(mat);
-  mat.customProgramCacheKey = () => prevKey() + '|tri';
+  mat.customProgramCacheKey = () => prevKey() + (object ? '|triO' : '|tri');
   return mat;
 }
 
@@ -227,4 +229,11 @@ export function shadeSpotsFromColliders(colliders) {
     }
   }
   return spots;
+}
+
+// textured prop materials (object-space triplanar, so they need no UVs and stick to moving parts)
+export function propMaterial(kind, params = {}, scale) {
+  const T = { wood: [woodTex, 1.6, 1.2], cloth: [clothTex, 3, 1], metal: [metalTex, 1.2, 0.8], bark: [barkTex, 1.2, 1.2], rock: [rockTex, 1.2, 1.2] }[kind];
+  const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, ...params });
+  return triplanar(m, T[0](), scale ?? T[1], { normalStrength: T[2], object: true });
 }
