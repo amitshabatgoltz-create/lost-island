@@ -16,6 +16,9 @@ import { freshState, loadState, saveState, clearState, loadSettings, saveSetting
 import { CONTAINERS, add as invAdd, count as invCount, spaceFor, transfer, totals } from './systems/inventory.js';
 import { isStorable } from './data/items.js';
 import { RECIPES } from './data/recipes.js';
+import { createPost } from './gfx/post.js';
+import { GFX } from './gfx/materials.js';
+import { setAnisotropy } from './gfx/textures.js';
 
 // zones are separate chunks, loaded on demand and disposed when left
 const ZONES = {
@@ -35,8 +38,10 @@ renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 0.92;
+renderer.toneMappingExposure = 1.0; // per time of day, see env.js
 renderer.outputColorSpace = THREE.SRGBColorSpace;
+setAnisotropy(Math.min(8, renderer.capabilities.getMaxAnisotropy()));
+const post = createPost(renderer);
 
 const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 4000);
 const ui = new UI();
@@ -69,6 +74,7 @@ let env, player, intro;
 
 window.addEventListener('resize', () => {
   renderer.setSize(innerWidth, innerHeight);
+  post.setSize(innerWidth, innerHeight);
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
   intro && intro.resize();
@@ -216,6 +222,7 @@ function applyZoneEnv(s = game.state) {
   const z = game.zone;
   if (!z) return;
   env.setTime(z.time(s), { fogDensity: z.fogDensity(s) });
+  post.setMood(z.time(s));
 }
 
 async function enterZone(to, spawnName) {
@@ -749,6 +756,14 @@ function resume() {
   requestPointer();
 }
 
+// graphics quality: high = post-processing, detailed terrain blending, 2048 shadows; low = plain render, 1024 shadows
+function applyQuality() {
+  const high = settings.hq !== false && !params.has('lowfx');
+  post.enabled = high;
+  GFX.detail.value = high ? 1 : 0;
+  env.setShadowQuality(high);
+}
+
 function applyShadowSetting() {
   renderer.shadowMap.enabled = settings.shadows;
   env.setShadows(settings.shadows);
@@ -760,9 +775,11 @@ function applySettings() {
   $('set-vol').value = settings.volume;
   $('set-invert').checked = settings.invertY;
   $('set-shadows').checked = settings.shadows;
+  $('set-quality').checked = settings.hq !== false;
   player.settings.sens = settings.sens;
   player.settings.invertY = settings.invertY;
   audio.setVolume(settings.volume);
+  applyQuality();
   applyShadowSetting();
 }
 function bindSetting(id, key, prop = 'value', parse = Number) {
@@ -770,6 +787,7 @@ function bindSetting(id, key, prop = 'value', parse = Number) {
     settings[key] = prop === 'checked' ? e.target.checked : parse(e.target.value);
     saveSettings(settings);
     if (key === 'shadows') applyShadowSetting();
+    if (key === 'hq') { applyQuality(); applyShadowSetting(); }
     player.settings.sens = settings.sens;
     player.settings.invertY = settings.invertY;
     audio.setVolume(settings.volume);
@@ -778,6 +796,7 @@ function bindSetting(id, key, prop = 'value', parse = Number) {
 bindSetting('set-sens', 'sens');
 bindSetting('set-vol', 'volume');
 bindSetting('set-invert', 'invertY', 'checked');
+bindSetting('set-quality', 'hq', 'checked');
 bindSetting('set-shadows', 'shadows', 'checked');
 
 $('btn-resume').addEventListener('click', resume);
@@ -975,8 +994,11 @@ function step(dt) {
 function loop() {
   requestAnimationFrame(loop);
   step(Math.min(clock.getDelta(), 0.05));
-  if (game.mode === 'intro') renderer.render(intro.scene, intro.camera);
-  else if (game.zone && game.mode !== 'transition') renderer.render(env.scene, camera);
+  renderFrame();
+}
+function renderFrame() {
+  if (game.mode === 'intro') post.render(intro.scene, intro.camera);
+  else if (game.zone && game.mode !== 'transition') post.render(env.scene, camera);
 }
 
 function updatePlay(dt) {
@@ -1037,6 +1059,9 @@ if (DEBUG) {
     keypad(code) { for (const k of code) ui.keypadPress(k); },
     get scope() { return game.scope; },
     showHint,
+    renderFrame,
+    post,
+    GFXdetail: GFX.detail,
   };
 }
 

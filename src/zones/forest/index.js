@@ -5,9 +5,11 @@ import { fbm, mulberry32, smoothstep } from '../../noise.js';
 import { heightAt as terrainHeight, streamZ, streamLevel, distToPaths } from './terrain.js';
 import { FL, PRINTS, CLEARINGS, BOUNDS } from './layout.js';
 import {
-  grainTexture, swayMaterial, palmGeometries, jungleTreeGeometries, bushGeometry, fernGeometry, grassGeometry, softSprite,
+  palmGeometries, jungleTreeGeometries, bushGeometry, fernGeometry, grassGeometry, softSprite,
 } from '../shared.js';
 import { canvasTex } from '../../items.js';
+import { terrainMaterial, triplanar, vegetationMaterials, bakeContactShade, shadeSpotsFromColliders } from '../../gfx/materials.js';
+import { litterTex, mossTex, dirtTex, rockTex } from '../../gfx/textures.js';
 import {
   buildTransmitter, buildSupplyDrop, buildTent, buildCabin, buildTable, buildCampProps, buildStringLights, buildLocker,
   buildPost, buildFootprints, buildFigure, buildStream, buildBridge, buildLogs, buildGiantTrees,
@@ -38,7 +40,8 @@ export async function build(env, api, onProgress = () => {}) {
   const ctx = { group, colliders, occluders, heightAt: terrainHeight };
 
   onProgress(0.1, 'פני השטח של היער');
-  group.add(buildTerrainMesh());
+  const terrain = buildTerrainMesh();
+  group.add(terrain);
   buildStream(ctx, streamZ, streamLevel, shared);
   bridgeHeight = buildBridge(ctx, FL.bridge, terrainHeight);
   await yieldFrame();
@@ -89,16 +92,14 @@ export async function build(env, api, onProgress = () => {}) {
   await yieldFrame();
 
   onProgress(0.65, 'עצים, שורשים וסלעים');
-  const trunkMat = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.95 });
-  const canopyMat = swayMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.9, flatShading: true }, shared, 0.025);
-  const smallMat = swayMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.9, side: THREE.DoubleSide }, shared, 0.08);
-  const palmLeafMat = swayMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.8, side: THREE.DoubleSide }, shared, 0.045);
+  const { trunkMat, palmTrunkMat, canopyMat, smallMat, palmLeafMat } = vegetationMaterials(shared);
   buildGiantTrees(ctx, [[-14, 60, 1.9], [12, 18, 2.1], [-28, -2, 1.8], [-6, -46, 2.0], [40, -40, 1.9], [-60, 20, 2.2], [30, 70, 1.9], [-80, -70, 2.0]], canopyMat, trunkMat, jungleTreeGeometries);
   buildLogs(ctx, [[8, 62, 7, 0.4, 0.45], [-24, 32, 6, 1.2, 0.4], [-54, -6, 8, -0.3, 0.5], [30, -28, 6, 0.9, 0.42], [-30, -52, 7, 2.1, 0.5], [48, 20, 9, 0.2, 0.55], [-70, 60, 6, 1.6, 0.4], [10, -86, 7, 0.1, 0.45]]);
   buildRocks(ctx, rnd);
   await yieldFrame();
   onProgress(0.75, 'צמחייה');
-  const smallChunks = buildVegetation(ctx, rnd, { trunkMat, canopyMat, smallMat, palmLeafMat }, cabin);
+  const smallChunks = buildVegetation(ctx, rnd, { trunkMat, palmTrunkMat, canopyMat, smallMat, palmLeafMat }, cabin);
+  bakeContactShade(terrain, shadeSpotsFromColliders(colliders));
   await yieldFrame();
 
   onProgress(0.88, 'אורות רחוקים');
@@ -191,39 +192,51 @@ export async function build(env, api, onProgress = () => {}) {
 
 // ---------------------------------------------------------------- terrain mesh
 function buildTerrainMesh() {
-  const W = 240, D = 290, SX = 150, SZ = 180;
+  const W = 240, D = 290, SX = 192, SZ = 232;
   const geo = new THREE.PlaneGeometry(W, D, SX, SZ);
   geo.rotateX(-Math.PI / 2);
   geo.translate(0, 0, -30);
   const pos = geo.attributes.position;
-  const colors = new Float32Array(pos.count * 3);
-  const c = new THREE.Color();
-  const litter = new THREE.Color(0x3b3524), moss = new THREE.Color(0x30442a), dirt = new THREE.Color(0x5a4831);
-  const rock = new THREE.Color(0x58554f), mud = new THREE.Color(0x2f2a22), clearing = new THREE.Color(0x4a4a2c);
+  // splat layers: leaf litter, moss, dirt/mud, rock
+  const colors = new Float32Array(pos.count * 3), splat = new Float32Array(pos.count * 4), wet = new Float32Array(pos.count);
+  const w = [0, 0, 0, 0];
+  const lerpTo = (k, ch) => { for (let j = 0; j < 4; j++) w[j] += ((j === ch ? 1 : 0) - w[j]) * k; };
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i), z = pos.getZ(i);
     const h = terrainHeight(x, z);
     pos.setY(i, h);
-    const n = fbm(x * 0.09, z * 0.09, 3);
-    c.copy(litter).lerp(moss, smoothstep(0.35, 0.7, n));
+    const n = fbm(x * 0.09, z * 0.09, 3), n2 = fbm(x * 0.025 + 3, z * 0.025, 3);
+    w[0] = 1; w[1] = w[2] = w[3] = 0;
+    lerpTo(smoothstep(0.4, 0.68, n), 1);
+    let clear = 0;
     for (const cl of CLEARINGS) {
       const d = Math.hypot(x - cl.x, z - cl.z);
-      if (d < cl.r) c.lerp(clearing, (1 - smoothstep(cl.r * 0.5, cl.r, d)) * 0.6);
+      if (d < cl.r) clear = Math.max(clear, 1 - smoothstep(cl.r * 0.5, cl.r, d));
     }
+    lerpTo(clear * 0.55, 1);
     const pd = distToPaths(x, z);
-    c.lerp(dirt, (1 - smoothstep(0.9, 2.3, pd)) * 0.9);
+    lerpTo((1 - smoothstep(0.7, 2.1, pd + (n - 0.5) * 1.0)) * 0.92, 2);
     const sd = Math.abs(z - streamZ(x));
-    c.lerp(mud, 1 - smoothstep(2.5, 5.5, sd));
+    const mud = 1 - smoothstep(2.5, 5.5, sd);
+    lerpTo(mud * 0.85, 2);
     const slope = Math.abs(terrainHeight(x + 1, z) - h) + Math.abs(terrainHeight(x, z + 1) - h);
-    c.lerp(rock, smoothstep(0.7, 1.4, slope));
-    const v = 0.85 + n * 0.3;
-    colors[i * 3] = c.r * v; colors[i * 3 + 1] = c.g * v; colors[i * 3 + 2] = c.b * v;
+    lerpTo(smoothstep(0.65, 1.25, slope), 3);
+    splat.set(w, i * 4);
+    wet[i] = mud * 0.9;
+    const v = 0.82 + n2 * 0.36;
+    colors[i * 3] = v * (1 - mud * 0.3); colors[i * 3 + 1] = v * (1 - mud * 0.25); colors[i * 3 + 2] = v * (1 - mud * 0.2);
   }
   geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  geo.setAttribute('splat', new THREE.BufferAttribute(splat, 4));
+  geo.setAttribute('wet', new THREE.BufferAttribute(wet, 1));
   geo.computeVertexNormals();
-  const tex = grainTexture();
-  tex.repeat.set(80, 90);
-  const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.97, map: tex }));
+  const mat = terrainMaterial([
+    { tex: litterTex(), scale: 1 / 3, rough: 0.94 },
+    { tex: mossTex(), scale: 1 / 3.5, rough: 0.97 },
+    { tex: dirtTex(), scale: 1 / 3.2, rough: 0.95 },
+    { tex: rockTex(), scale: 1 / 6, rough: 0.8 },
+  ]);
+  const mesh = new THREE.Mesh(geo, mat);
   mesh.receiveShadow = true;
   mesh.name = 'forest-terrain';
   return mesh;
@@ -242,7 +255,7 @@ function buildRocks(ctx, rnd) {
     g.computeVertexNormals();
     return g;
   });
-  const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, flatShading: true });
+  const mat = triplanar(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.88 }), rockTex(), 0.35, { normalStrength: 1.2 });
   const list = [];
   // boulders along the cliff foot and on the plateau
   for (let i = 0; i < 46; i++) {
@@ -269,7 +282,7 @@ function buildRocks(ctx, rnd) {
       sc.set(s * (0.9 + rnd() * 0.3), s * (0.8 + rnd() * 0.4), s * (0.9 + rnd() * 0.3));
       v.set(x, terrainHeight(x, z) - s * 0.2, z);
       im.setMatrixAt(i, m4.compose(v, q, sc));
-      const g = 0.24 + rnd() * 0.1;
+      const g = 0.55 + rnd() * 0.25;
       col.setRGB(g, g * 1.02, g * 0.95);
       im.setColorAt(i, col);
       if (s > 0.6 && x > BOUNDS.minX - 4 && x < BOUNDS.maxX + 4) ctx.colliders.push({ type: 'circle', x, z, r: s * 0.9 });
@@ -349,7 +362,7 @@ function buildVegetation(ctx, rnd, mats, cabin) {
   });
   const palm = palmGeometries();
   const pset = place(palms, { scale: [0.9, 1.2], collide: 0.33, sink: 0.1 });
-  add(palm.trunk, mats.trunkMat, pset, true);
+  add(palm.trunk, mats.palmTrunkMat, pset, true);
   add(palm.leaves, mats.palmLeafMat, pset, true);
   add(bushGeometry(11), mats.canopyMat, place(bushes, { scale: [0.8, 1.7], sink: 0.1 }), true, 80, true);
   add(fernGeometry(), mats.smallMat, place(ferns, { scale: [0.8, 1.6], tint: 1.1 }), false, 60);
