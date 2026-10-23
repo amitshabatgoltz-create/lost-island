@@ -511,3 +511,93 @@ export const foliageAtlas = () => cached('foliage', () => {
   t.anisotropy = 4;
   return t;
 });
+
+// ================================================================== cloth, painted metal, clothing
+// woven canvas / tarp: near-white so materials tint it; stains and water marks
+export const clothTex = () => cached('cloth', () => {
+  const S = 256, { c } = canvas(S);
+  const big = tileFbm(S, 4, 4, 141), stain = tileFbm(S, 3, 4, 142), fine = tileFbm(S, 64, 2, 143);
+  const id = c.createImageData(S, S), d = id.data, height = new Float32Array(S * S);
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const i = y * S + x;
+    const warp = 0.5 + 0.5 * Math.sin(x * Math.PI * 0.5), weft = 0.5 + 0.5 * Math.sin(y * Math.PI * 0.5);
+    const weave = ((x >> 1) + (y >> 1)) % 2 ? warp : weft;
+    const st = Math.max(0, stain[i] - 0.58) * 2.2;
+    const k = (0.86 + weave * 0.1 + big[i] * 0.12 + (fine[i] - 0.5) * 0.06) * (1 - st * 0.35);
+    d[i * 4] = 236 * k; d[i * 4 + 1] = 232 * k * (1 - st * 0.05); d[i * 4 + 2] = 222 * k * (1 - st * 0.12); d[i * 4 + 3] = 255;
+    height[i] = 0.4 + weave * 0.25 + big[i] * 0.2;
+  }
+  c.putImageData(id, 0, 0);
+  return finish(c, height, S, S, 1.6);
+});
+
+// painted, chipped and scratched metal (crates, cases, cabinets)
+export const metalTex = () => cached('metal', () => {
+  const S = 256, { c } = canvas(S);
+  const big = tileFbm(S, 4, 4, 151), chip = tileFbm(S, 16, 3, 152), fine = tileFbm(S, 64, 2, 153), streak = tileFbm(S, 2, 3, 154);
+  const id = c.createImageData(S, S), d = id.data, height = new Float32Array(S * S);
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const i = y * S + x;
+    const ch = chip[i] > 0.7 ? 1 : 0; // paint chipped off: bare grey metal
+    const st = Math.pow(streak[(y % 32) * S + x], 2) * 0.15;
+    const k = 0.88 + big[i] * 0.14 + (fine[i] - 0.5) * 0.06 - st;
+    if (ch) { d[i * 4] = 150 * k; d[i * 4 + 1] = 146 * k; d[i * 4 + 2] = 140 * k; }
+    else { d[i * 4] = 238 * k; d[i * 4 + 1] = 238 * k; d[i * 4 + 2] = 236 * k; }
+    d[i * 4 + 3] = 255;
+    height[i] = ch ? 0.35 : 0.55 + (fine[i] - 0.5) * 0.05;
+  }
+  c.putImageData(id, 0, 0);
+  const r = rng(155);
+  c.strokeStyle = 'rgba(120,120,120,0.45)'; c.lineWidth = 0.7;
+  for (let n = 0; n < 60; n++) { const x = r() * S, y = r() * S, a = r() * Math.PI, L = 4 + r() * 24; c.beginPath(); c.moveTo(x, y); c.lineTo(x + Math.cos(a) * L, y + Math.sin(a) * L); c.stroke(); }
+  return finish(c, height, S, S, 1.4);
+});
+
+// survivor's shirt: faded light-blue cotton, sweat/dirt marks, a dried blood smear (uv: u around the body, v up)
+export const shirtTex = () => cached('shirt', () => {
+  const W = 512, H = 256, { c } = canvas(W, H);
+  const n = tileFbm(256, 4, 4, 161), fine = tileFbm(256, 64, 2, 162);
+  const id = c.createImageData(W, H), d = id.data, height = new Float32Array(W * H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const j = (y % 256) * 256 + (x % 256), i = y * W + x;
+    const weave = ((x + y) % 3 === 0) ? 0.95 : 1.02;
+    const dirt = Math.max(0, n[j] - 0.55) * 1.6 + (1 - y / H) * 0.18; // dirtier towards the hem
+    const k = (0.92 + (fine[j] - 0.5) * 0.08) * weave;
+    d[i * 4] = (150 - dirt * 50) * k; d[i * 4 + 1] = (186 - dirt * 60) * k; d[i * 4 + 2] = (212 - dirt * 80) * k; d[i * 4 + 3] = 255;
+    // wrinkles: soft horizontal folds
+    height[i] = 0.5 + 0.12 * Math.sin(y * 0.18 + n[j] * 6) + (fine[j] - 0.5) * 0.1;
+  }
+  c.putImageData(id, 0, 0);
+  // blood smear and tears
+  const g = c.createRadialGradient(W * 0.62, H * 0.62, 2, W * 0.62, H * 0.62, 26);
+  g.addColorStop(0, 'rgba(110,30,25,0.65)'); g.addColorStop(1, 'rgba(110,30,25,0)');
+  c.fillStyle = g; c.beginPath(); c.ellipse(W * 0.62, H * 0.62, 30, 18, 0.4, 0, 7); c.fill();
+  c.strokeStyle = 'rgba(40,50,60,0.55)'; c.lineWidth = 2;
+  for (const [x, y, l] of [[W * 0.2, H * 0.25, 14], [W * 0.8, H * 0.15, 10], [W * 0.45, H * 0.1, 18]]) { c.beginPath(); c.moveTo(x, y); c.lineTo(x + l * 0.5, y - l * 0.3); c.lineTo(x + l, y + 2); c.stroke(); }
+  // button placket down the front (u = 0.25 is the front of a capsule/lathe)
+  c.fillStyle = 'rgba(80,100,120,0.35)'; c.fillRect(W * 0.25 - 3, 0, 6, H);
+  c.fillStyle = '#e8e4da';
+  for (let y = 24; y < H; y += 44) { c.beginPath(); c.arc(W * 0.25, y, 3, 0, 7); c.fill(); }
+  const hgt = new Float32Array(W * H);
+  for (let i = 0; i < W * H; i++) hgt[i] = height[i];
+  const t = finish(c, hgt, W, H, 2.0);
+  t.map.wrapT = t.normalMap.wrapT = THREE.ClampToEdgeWrapping;
+  return t;
+});
+
+// khaki cargo trousers (twill)
+export const twillTex = () => cached('twill', () => {
+  const S = 256, { c } = canvas(S);
+  const n = tileFbm(S, 4, 4, 171), fine = tileFbm(S, 64, 2, 172);
+  const id = c.createImageData(S, S), d = id.data, height = new Float32Array(S * S);
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const i = y * S + x;
+    const tw = 0.5 + 0.5 * Math.sin((x + y) * Math.PI * 0.5);
+    const dirt = Math.max(0, n[i] - 0.5) * 1.2;
+    const k = (0.84 + tw * 0.1 + (fine[i] - 0.5) * 0.08) * (1 - dirt * 0.3);
+    d[i * 4] = 140 * k; d[i * 4 + 1] = 128 * k; d[i * 4 + 2] = 100 * k; d[i * 4 + 3] = 255;
+    height[i] = 0.4 + tw * 0.3 + n[i] * 0.2;
+  }
+  c.putImageData(id, 0, 0);
+  return finish(c, height, S, S, 1.8);
+});

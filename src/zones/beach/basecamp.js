@@ -3,6 +3,8 @@
 import * as THREE from 'three';
 import { canvasTex, drawSymbol } from '../../items.js';
 import { shadowAll, softSprite } from '../shared.js';
+import { propMaterial, foliageMaterial, toAtlas } from '../../gfx/materials.js';
+import { ATLAS } from '../../gfx/textures.js';
 
 const std = (o) => new THREE.MeshStandardMaterial(o);
 const rot2 = (lx, lz, r) => ({ x: lx * Math.cos(r) + lz * Math.sin(r), z: -lx * Math.sin(r) + lz * Math.cos(r) });
@@ -18,11 +20,13 @@ function planks(base) {
 
 export function buildBaseCamp(group, colliders, occluders, heightAt, B) {
   const g = new THREE.Group();
-  const wood = std({ map: planks('#7d6243'), roughness: 0.95 });
-  const pole = std({ color: 0x6b5338, roughness: 1 });
+  // salvaged planks, bleached driftwood poles, rope, canvas: textured in object space (no UVs needed)
+  const wood = propMaterial('wood', { color: 0xc49a6c, roughness: 0.92 });
+  const pole = propMaterial('wood', { color: 0xb3a48c, roughness: 0.95 }, 2.4);
+  const rope = propMaterial('cloth', { color: 0xc4ab78, roughness: 1 }, 8);
   const W = 5.2, D = 3.4;
   // ground: a woven mat and a sand-swept floor
-  const mat = new THREE.Mesh(new THREE.CircleGeometry(2.4, 24), std({ color: 0xa48d62, roughness: 1 }));
+  const mat = new THREE.Mesh(new THREE.CircleGeometry(2.4, 24), propMaterial('cloth', { color: 0xb59c6c, roughness: 1 }, 5));
   mat.rotation.x = -Math.PI / 2;
   mat.scale.set(1.15, 0.8, 1);
   mat.position.set(0, 0.025, -0.3);
@@ -30,9 +34,16 @@ export function buildBaseCamp(group, colliders, occluders, heightAt, B) {
   // poles: front taller, back lower (rain runs off the back)
   const posts = [[-W / 2, D / 2, 2.4], [W / 2, D / 2, 2.4], [-W / 2, -D / 2, 1.5], [W / 2, -D / 2, 1.5], [0, D / 2, 2.4]];
   for (const [x, z, h] of posts) {
-    const p = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, h, 7), pole);
+    const p = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.095, h, 9), pole);
     p.position.set(x, h / 2, z);
     g.add(p);
+    // rope lashing where the post meets the beam
+    for (let k = 0; k < 3; k++) {
+      const lash = new THREE.Mesh(new THREE.TorusGeometry(0.085, 0.016, 5, 12), rope);
+      lash.rotation.x = Math.PI / 2 + (k - 1) * 0.35;
+      lash.position.set(x, h - 0.07 - k * 0.045, z);
+      g.add(lash);
+    }
   }
   for (const [z, h] of [[D / 2, 2.35], [-D / 2, 1.45]]) {
     const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, W + 0.3, 7), pole);
@@ -46,7 +57,7 @@ export function buildBaseCamp(group, colliders, occluders, heightAt, B) {
   const rp = roofGeo.attributes.position;
   for (let i = 0; i < rp.count; i++) rp.setZ(i, -Math.sin((rp.getX(i) / (W + 0.6)) * Math.PI * 4) * 0.04 - Math.abs(Math.sin(rp.getY(i) * 1.2)) * 0.06);
   roofGeo.computeVertexNormals();
-  const roof = new THREE.Mesh(roofGeo, std({ color: 0x2c4f7c, roughness: 0.9, side: THREE.DoubleSide }));
+  const roof = new THREE.Mesh(roofGeo, propMaterial('cloth', { color: 0x4f7398, roughness: 0.95, side: THREE.DoubleSide }, 2.2));
   roof.rotation.x = -Math.PI / 2 + Math.atan2(0.9, D);
   roof.position.set(0, 1.95, 0);
   g.add(roof);
@@ -61,18 +72,22 @@ export function buildBaseCamp(group, colliders, occluders, heightAt, B) {
   }));
   panel.position.set(0, 0.72, -D / 2 - 0.05);
   g.add(panel);
-  // left wall: woven palm fronds
-  const fronds = new THREE.Mesh(new THREE.PlaneGeometry(D, 1.8, 6, 3), std({
-    map: canvasTex(128, 128, (c, w, h) => { c.fillStyle = '#6b6a36'; c.fillRect(0, 0, w, h); c.strokeStyle = '#4c4a24'; c.lineWidth = 3; for (let i = -h; i < w; i += 10) { c.beginPath(); c.moveTo(i, 0); c.lineTo(i + h, h); c.stroke(); } }),
-    roughness: 1, side: THREE.DoubleSide,
-  }));
-  fronds.rotation.y = Math.PI / 2;
-  fronds.position.set(-W / 2 - 0.02, 0.9, 0);
-  g.add(fronds);
+  // left wall: palm fronds leaned against the frame (alpha-cut leaf cards from the foliage atlas)
+  const frondMat = foliageMaterial({ time: { value: 0 } }, 0, { translucency: 0.4 });
+  for (let i = 0; i < 9; i++) {
+    const fg = new THREE.PlaneGeometry(1.5, 2.3, 2, 4);
+    toAtlas(fg, ATLAS.palm);
+    fg.setAttribute('color', new THREE.Float32BufferAttribute(new Array(fg.attributes.position.count * 3).fill(0.85 - (i % 3) * 0.08), 3));
+    const fr = new THREE.Mesh(fg, frondMat);
+    fr.rotation.set(0, Math.PI / 2, 0.12 * (i % 2 ? 1 : -1));
+    fr.position.set(-W / 2 - 0.05 - (i % 2) * 0.04, 1.0, -D / 2 + 0.2 + i * (D - 0.4) / 8);
+    fr.rotation.x = (i % 3 - 1) * 0.1;
+    g.add(fr);
+  }
 
   // ---------------------------------------------------------------- storage chest
   const chest = new THREE.Group();
-  const band = std({ color: 0x3b3b3b, roughness: 0.4, metalness: 0.7 });
+  const band = propMaterial('metal', { color: 0x4d4b48, roughness: 0.45, metalness: 0.65 }, 4);
   const body = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.5, 0.62), wood);
   body.position.y = 0.25;
   chest.add(body);
@@ -200,12 +215,12 @@ export function buildBaseCamp(group, colliders, occluders, heightAt, B) {
     j.position.set(x, 0.21, z);
     g.add(j);
   });
-  const bed = new THREE.Mesh(new THREE.CapsuleGeometry(0.3, 1.5, 4, 8), std({ color: 0x8a3b32, roughness: 1 }));
+  const bed = new THREE.Mesh(new THREE.CapsuleGeometry(0.3, 1.5, 4, 12), propMaterial('cloth', { color: 0x9a4236, roughness: 1 }, 4));
   bed.rotation.z = Math.PI / 2;
   bed.scale.set(1, 1, 0.35);
   bed.position.set(-0.05, 0.1, -0.95);
   g.add(bed);
-  const ropeCoil = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.03, 6, 18), std({ color: 0xc9b37a, roughness: 0.9 }));
+  const ropeCoil = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.03, 6, 18), rope);
   ropeCoil.rotation.x = Math.PI / 2;
   ropeCoil.position.set(W / 2 - 0.3, 1.0, -D / 2 + 0.2);
   g.add(ropeCoil);
@@ -217,18 +232,41 @@ export function buildBaseCamp(group, colliders, occluders, heightAt, B) {
   net.rotation.y = Math.PI / 2;
   g.add(net);
   const pit = new THREE.Group();
-  for (let i = 0; i < 9; i++) {
-    const a = (i / 9) * Math.PI * 2;
-    const st = new THREE.Mesh(new THREE.DodecahedronGeometry(0.13), std({ color: 0x77736b, roughness: 1, flatShading: true }));
-    st.position.set(Math.cos(a) * 0.5, 0.07, Math.sin(a) * 0.5);
+  const stoneMat = propMaterial('rock', { color: 0xb8b2a8, roughness: 0.9 }, 2.5);
+  for (let i = 0; i < 11; i++) {
+    const a = (i / 11) * Math.PI * 2;
+    const geo = new THREE.IcosahedronGeometry(0.13 + (i % 3) * 0.025, 1);
+    const pp = geo.attributes.position;
+    for (let k = 0; k < pp.count; k++) { const f = 1 + Math.sin(pp.getX(k) * 31 + i) * Math.sin(pp.getZ(k) * 27 + i * 2) * 0.18; pp.setXYZ(k, pp.getX(k) * f, pp.getY(k) * f * 0.7, pp.getZ(k) * f); }
+    geo.computeVertexNormals();
+    const st = new THREE.Mesh(geo, stoneMat);
+    st.position.set(Math.cos(a) * 0.52, 0.06, Math.sin(a) * 0.52);
+    st.rotation.y = i;
     pit.add(st);
   }
-  for (let i = 0; i < 3; i++) {
-    const log = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 0.6, 6), std({ color: 0x2b2118, roughness: 1 }));
-    log.rotation.set(Math.PI / 2, (i / 3) * Math.PI, 0.3);
-    log.position.y = 0.08;
+  const ash = new THREE.Mesh(new THREE.CircleGeometry(0.42, 18), std({ color: 0x2a2724, roughness: 1 }));
+  ash.rotation.x = -Math.PI / 2;
+  ash.position.y = 0.02;
+  pit.add(ash);
+  const charred = propMaterial('bark', { color: 0x3b3029, roughness: 1 }, 3);
+  for (let i = 0; i < 4; i++) {
+    const log = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.06, 0.62, 8), charred);
+    log.rotation.set(Math.PI / 2 - 0.35, (i / 4) * Math.PI * 2, 0);
+    log.position.set(Math.cos((i / 4) * Math.PI * 2) * 0.12, 0.13, Math.sin((i / 4) * Math.PI * 2) * 0.12);
     pit.add(log);
   }
+  // firewood stack and a log to sit on
+  const logMat = propMaterial('bark', { color: 0xd8bf9c, roughness: 0.95 }, 2.5);
+  for (let i = 0; i < 6; i++) {
+    const log = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 0.75, 8), logMat);
+    log.rotation.z = Math.PI / 2;
+    log.position.set(1.15, 0.07 + Math.floor(i / 3) * 0.12, -0.15 + (i % 3) * 0.14 + (i >= 3 ? 0.07 : 0));
+    pit.add(log);
+  }
+  const seat = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.19, 1.3, 10), logMat);
+  seat.rotation.set(0, 0.3, Math.PI / 2);
+  seat.position.set(0.1, 0.16, 1.05);
+  pit.add(seat);
   pit.position.set(0.2, 0, 3.1);
   g.add(pit);
 
@@ -250,6 +288,8 @@ export function buildBaseCamp(group, colliders, occluders, heightAt, B) {
   box(1.4, -0.95, 0.82, 0.4); // workbench
   circ(2.75, 1.3, 0.35); // board
   circ(0.2, 3.1, 0.62); // fire pit
+  circ(1.35, 3.1, 0.4); // firewood
+  circ(0.3, 4.15, 0.35); // log seat
 
   return {
     spots: { chest: at(-1.6, -0.25), bench: at(1.4, -0.15), board: at(2.0, 1.75), lantern: at(-0.4, 1.1), center: at(0, 0.4) },

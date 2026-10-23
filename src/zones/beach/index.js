@@ -292,7 +292,6 @@ function buildFuselage() {
       p.setXYZ(i, x, y, z);
       let r = 0.93, gg = 0.93, b = 0.92;
       const side = Math.abs(Math.abs(a) - Math.PI / 2);
-      if (Math.abs(a) > Math.PI / 2 + 0.12 && Math.abs(a) < Math.PI / 2 + 0.34) { r = 0.1; gg = 0.24; b = 0.46; }
       if (Math.abs(a) > 2.3) { r = 0.62; gg = 0.64; b = 0.66; }
       const dirt = fbm(y * 0.4, a * 3 + 2, 3);
       const burn = Math.max(0, endT - 0.6) * 1.4 + (dirt > 0.62 ? (dirt - 0.62) * 3 : 0);
@@ -306,7 +305,13 @@ function buildFuselage() {
     g.computeVertexNormals();
     return g;
   }
-  const outer = new THREE.Mesh(scaleUV(shell(R, false), 7, 10), metalWhite());
+  // painted livery (cheatline, titles, window frames, door, grime) + the shared panel normal map tiled over it
+  const panelN = panelTex().normalMap.clone();
+  panelN.repeat.set(7, 10);
+  panelN.needsUpdate = true;
+  const outer = new THREE.Mesh(shell(R, false), new THREE.MeshStandardMaterial({
+    color: 0xffffff, vertexColors: true, roughness: 0.4, metalness: 0.15, map: liveryTexture(R, L), normalMap: panelN, normalScale: new THREE.Vector2(0.9, 0.9),
+  }));
   const innerMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, side: THREE.BackSide });
   const inner = new THREE.Mesh(shell(R * 0.965, true), innerMat);
   group.add(outer, inner);
@@ -318,15 +323,51 @@ function buildFuselage() {
       const xl = -8.6 + i * 0.75;
       if (xl > 7.2) continue;
       const a = s * (Math.PI / 2 - 0.3);
-      const w = new THREE.BoxGeometry(0.34, 0.46, 0.08);
+      const w = new THREE.CapsuleGeometry(0.13, 0.17, 4, 12);
+      w.scale(1, 1, 0.22);
       w.rotateX(a - Math.PI / 2);
       const y = Math.cos(a) * (R + 0.01), z = Math.sin(a) * (R + 0.01);
       w.translate(xl, y, z);
       winGeos.push(w);
     }
   }
-  const windows = new THREE.Mesh(merge(winGeos), new THREE.MeshStandardMaterial({ color: 0x141c24, roughness: 0.15, metalness: 0.6 }));
+  const windows = new THREE.Mesh(merge(winGeos), new THREE.MeshStandardMaterial({ color: 0x0e151c, roughness: 0.08, metalness: 0.2, envMapIntensity: 1.6 }));
   group.add(windows);
+
+  // exposed structure at the torn end: bent frame rings, stringers and hanging cables
+  const frameMat = new THREE.MeshStandardMaterial({ color: 0x8f969c, roughness: 0.45, metalness: 0.7 });
+  const insul = new THREE.MeshStandardMaterial({ color: 0xc9b46a, roughness: 1 });
+  [[-9.0, 0.3, 1.5], [-8.3, 1.4, 1.75], [-7.6, 2.6, 1.9]].forEach(([x, start, arc]) => {
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(R * 0.95, 0.045, 5, 40, Math.PI * arc), frameMat);
+    ring.rotation.set(0, Math.PI / 2, start);
+    ring.position.x = x;
+    group.add(ring);
+  });
+  for (let i = 0; i < 7; i++) {
+    const th = 0.6 + i * 0.32;
+    const st = new THREE.Mesh(new THREE.BoxGeometry(2.4 - (i % 3) * 0.5, 0.05, 0.03), frameMat);
+    st.position.set(-8.9 + (i % 3) * 0.25, Math.sin(th) * R * 0.94, Math.cos(th) * R * 0.94);
+    st.rotation.x = -th;
+    group.add(st);
+  }
+  const insGeo = new THREE.PlaneGeometry(0.9, 0.6, 4, 3);
+  const ip = insGeo.attributes.position;
+  for (let i = 0; i < ip.count; i++) ip.setZ(i, Math.sin(ip.getX(i) * 7) * 0.05 + Math.sin(ip.getY(i) * 9) * 0.04);
+  insGeo.computeVertexNormals();
+  [[-8.7, 1.3, 1.25], [-8.0, 1.9, -0.6]].forEach(([x, y, z]) => {
+    const pad = new THREE.Mesh(insGeo, insul);
+    pad.position.set(x, y, z);
+    pad.lookAt(x, 0, 0);
+    pad.material.side = THREE.DoubleSide;
+    group.add(pad);
+  });
+  const cableMat = new THREE.MeshStandardMaterial({ color: 0x1b1d20, roughness: 0.6 });
+  [[0.2, 0x1b1d20], [0.5, 0xb03a2e], [-0.3, 0x2e5fa0], [0.9, 0x1b1d20]].forEach(([z, col], i) => {
+    const top = new THREE.Vector3(-9.3 + i * 0.15, R * 0.85, z);
+    const curve = new THREE.CatmullRomCurve3([top, new THREE.Vector3(top.x - 0.5, R * 0.1, z * 1.4), new THREE.Vector3(top.x - 0.9 - i * 0.2, -0.85, z * 1.8 + 0.3)]);
+    const cab = new THREE.Mesh(new THREE.TubeGeometry(curve, 16, 0.022, 5), i ? new THREE.MeshStandardMaterial({ color: col, roughness: 0.6 }) : cableMat);
+    group.add(cab);
+  });
 
   // cabin floor + a few seats inside
   const floor = new THREE.Mesh(new THREE.BoxGeometry(L - 1.5, 0.1, 3.6), new THREE.MeshStandardMaterial({ color: 0x3a3f4a, roughness: 0.95 }));
@@ -347,6 +388,78 @@ function buildFuselage() {
 }
 
 
+
+// Fuselage livery painted in cylinder UV space: u = angle around the body (0 = +z side, 0.25 = top),
+// v = along the body (canvas top = the torn front end, -L/2).
+function liveryTexture(R, L) {
+  const W = 2048, H = 1024;
+  const cv = document.createElement('canvas');
+  cv.width = W; cv.height = H;
+  const c = cv.getContext('2d');
+  const X = (th) => ((th / (Math.PI * 2)) % 1 + 1) % 1 * W;
+  const Y = (x) => ((x + L / 2) / L) * H;
+  c.fillStyle = '#efefec'; c.fillRect(0, 0, W, H);
+  // sides: [window angle, direction of "up" in u]
+  const sides = [[Math.asin(0.3), 1], [Math.PI - Math.asin(0.3), -1]];
+  // a band of angles; drawn at -W/0/+W so bands that cross the u = 0 seam wrap correctly
+  const bandU = (th0, th1, color) => {
+    const a = (Math.min(th0, th1) / (Math.PI * 2)) * W, b = (Math.max(th0, th1) / (Math.PI * 2)) * W;
+    c.fillStyle = color;
+    for (const ox of [-W, 0, W]) c.fillRect(a + ox, 0, b - a, H);
+  };
+  for (const [tw, up] of sides) {
+    // cheatline below the windows, red pinstripe under it
+    bandU(tw - up * 0.26, tw - up * 0.12, '#1d4373');
+    bandU(tw - up * 0.33, tw - up * 0.29, '#b8352c');
+    // window frames
+    for (let i = 0; i < 22; i++) {
+      const xl = -8.6 + i * 0.75;
+      if (xl > 7.2) continue;
+      const cx = X(tw), cy = Y(xl), rw = (0.21 / (Math.PI * 2 * R)) * W, rh = (0.17 / L) * H;
+      c.fillStyle = '#c4c8cc';
+      c.beginPath(); c.ellipse(cx, cy, rw, rh, 0, 0, 7); c.fill();
+    }
+    // titles above the windows
+    c.save();
+    c.translate(X(tw + up * 0.42), Y(up > 0 ? -5.5 : 4.2));
+    c.rotate(up > 0 ? Math.PI / 2 : -Math.PI / 2);
+    c.fillStyle = '#1d4373';
+    c.font = `bold ${Math.round((0.55 / (Math.PI * 2 * R)) * W)}px Arial`;
+    c.textBaseline = 'middle';
+    c.scale((H / L) / (W / (Math.PI * 2 * R)), 1); // compensate the different pixel density along the body
+    c.fillText('MERIDIAN', 0, 0);
+    c.restore();
+    // flight number near the rear
+    c.save();
+    c.translate(X(tw + up * 0.2), Y(up > 0 ? 8.1 : -8.9));
+    c.rotate(up > 0 ? Math.PI / 2 : -Math.PI / 2);
+    c.scale((H / L) / (W / (Math.PI * 2 * R)), 1);
+    c.fillStyle = '#3a3f46';
+    c.font = `bold ${Math.round((0.18 / (Math.PI * 2 * R)) * W)}px Arial`;
+    c.textBaseline = 'middle';
+    c.fillText('NV-2207', 0, 0);
+    c.restore();
+  }
+  // passenger door on the +z side behind the last window
+  c.strokeStyle = 'rgba(70,74,80,0.85)'; c.lineWidth = 3;
+  // the door spans the u = 0 seam, so draw it twice: once shifted left by the full width
+  const dl = X(-0.5) - W, dw = X(0.55) - dl;
+  for (const ox of [0, W]) c.strokeRect(dl + ox, Y(7.45), dw, Y(8.4) - Y(7.45));
+  c.fillStyle = '#b8352c'; c.fillRect(X(0.1), Y(7.55), 10, 22);
+  // grime: streaks running down the sides and a darker, scuffed belly
+  for (let i = 0; i < 1400; i++) {
+    const x = Math.random() * W, y = Math.random() * H, len = 10 + Math.random() * 60;
+    c.fillStyle = `rgba(80,74,64,${0.03 + Math.random() * 0.05})`;
+    c.fillRect(x, y, len, 1 + Math.random() * 2);
+  }
+  const g = c.createLinearGradient(X(Math.PI * 1.1), 0, X(Math.PI * 1.9), 0);
+  g.addColorStop(0, 'rgba(70,64,56,0)'); g.addColorStop(0.5, 'rgba(70,64,56,0.35)'); g.addColorStop(1, 'rgba(70,64,56,0)');
+  c.fillStyle = g; c.fillRect(X(Math.PI * 1.1), 0, X(Math.PI * 1.9) - X(Math.PI * 1.1), H);
+  const t = new THREE.CanvasTexture(cv);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 8;
+  return t;
+}
 
 function buildWing() {
   const shape = new THREE.Shape();
