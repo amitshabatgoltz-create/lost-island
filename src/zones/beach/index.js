@@ -151,7 +151,7 @@ function buildTerrain() {
     const grassK = smoothstep(15, 28, d + (n - 0.5) * 12);
     lerpTo(grassK, 1);
     const pd = distToPaths(x, z);
-    if (d > 6) lerpTo((1 - smoothstep(0.7, 2.2, pd + (n - 0.5) * 1.2)) * 0.9 * smoothstep(6, 16, d), 2);
+    if (d > 6) lerpTo((1 - smoothstep(0.7, 2.2, pd + (n - 0.5) * 1.2)) * 0.9 * smoothstep(11, 21, d), 2);
     // steep slopes become rock
     const slope = Math.abs(heightAt(x + 1, z) - h) + Math.abs(heightAt(x, z + 1) - h);
     lerpTo(smoothstep(0.5, 1.0, slope), 3);
