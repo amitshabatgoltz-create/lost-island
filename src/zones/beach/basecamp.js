@@ -263,9 +263,10 @@ export function buildBaseCamp(group, colliders, occluders, heightAt, B) {
     log.position.set(1.15, 0.07 + Math.floor(i / 3) * 0.12, -0.15 + (i % 3) * 0.14 + (i >= 3 ? 0.07 : 0));
     pit.add(log);
   }
-  const seat = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.19, 1.3, 10), logMat);
+  // a thick log at sitting height (the player can sit on it, facing the fire)
+  const seat = new THREE.Mesh(new THREE.CylinderGeometry(0.21, 0.23, 1.3, 12), logMat);
   seat.rotation.set(0, 0.3, Math.PI / 2);
-  seat.position.set(0.1, 0.16, 1.05);
+  seat.position.set(0.1, 0.22, 1.45);
   pit.add(seat);
   pit.position.set(0.2, 0, 3.1);
   g.add(pit);
@@ -289,10 +290,16 @@ export function buildBaseCamp(group, colliders, occluders, heightAt, B) {
   circ(2.75, 1.3, 0.35); // board
   circ(0.2, 3.1, 0.62); // fire pit
   circ(1.35, 3.1, 0.4); // firewood
-  circ(0.3, 4.15, 0.35); // log seat
+  circ(0.3, 4.55, 0.35); // log seat
 
   return {
-    spots: { chest: at(-1.6, -0.25), bench: at(1.4, -0.15), board: at(2.0, 1.75), lantern: at(-0.4, 1.1), center: at(0, 0.4) },
+    spots: { chest: at(-1.6, -0.25), bench: at(1.4, -0.15), board: at(2.0, 1.75), lantern: at(-0.4, 1.1), center: at(0, 0.4), seat: at(0.3, 4.55), fire: at(0.2, 3.1) },
+    // where the player stands so that sitting down (the clip steps back ~0.49 m) lands on the log
+    sitSpot: (() => {
+      const s = at(0.3, 4.55), f = at(0.2, 3.1);
+      const dx = f.x - s.x, dz = f.z - s.z, d = Math.hypot(dx, dz);
+      return { x: s.x + (dx / d) * 0.49, z: s.z + (dz / d) * 0.49, yaw: Math.atan2(dx, dz) };
+    })(),
     lidPivot, light, glassMat, glowMat,
     setPins(n) {
       pins.forEach((p, i) => (p.visible = i < n));
