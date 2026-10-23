@@ -187,7 +187,7 @@ async function boot() {
   }
   ui.setLoading(0.96, 'מכין שיידרים');
   await new Promise((r) => setTimeout(r, 0));
-  renderer.compile(intro.scene, intro.camera);
+  intro.compile(renderer);
   ui.setLoading(1, 'מוכן');
   setTimeout(() => { ui.show('loading', false); showTitle(); }, 250);
   requestAnimationFrame(loop);
@@ -1048,6 +1048,7 @@ if (DEBUG) {
     get player() { return player; },
     get zone() { return game.zone; },
     get env() { return env; },
+    get intro() { return intro; },
     teleport(x, z) { player.setPosition(x, z, player.facing); },
     interact,
     enterZone,
