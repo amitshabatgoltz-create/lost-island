@@ -607,7 +607,7 @@ function buildWreck(scene, colliders, occluders, updaters, rnd) {
 // =====================================================================
 function buildRocks(scene, colliders, occluders, rnd) {
   const variants = [1, 2, 3].map((seed) => {
-    const g = new THREE.IcosahedronGeometry(1, 3);
+    const g = new THREE.IcosahedronGeometry(1, 2);
     const p = g.attributes.position;
     for (let i = 0; i < p.count; i++) {
       const x = p.getX(i), y = p.getY(i), z = p.getZ(i);

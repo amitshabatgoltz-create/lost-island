@@ -163,7 +163,7 @@ function shadeVertices(geo, fn) {
 
 // leaf crown: dark core blob + leaf-cluster cards on its surface
 function crown(parts, cx, cy, cz, radius, cards, cardSize, r, centre, tint = [1, 1, 1]) {
-  const core = new THREE.IcosahedronGeometry(radius * 0.6, 1);
+  const core = new THREE.IcosahedronGeometry(radius * 0.6, 0);
   jitterGeometry(core, radius * 0.18, 2, cx * 3 + cz);
   core.scale(1, 0.78, 1);
   core.translate(cx, cy, cz);
@@ -279,7 +279,7 @@ export function jungleTreeGeometries(seed) {
     const a = r() * Math.PI * 2, d = i === 0 ? 0 : 1.2 + r() * 1.0;
     const cx = Math.cos(a) * d, cy = H + (r() - 0.3) * 1.6, cz = Math.sin(a) * d;
     const before = leafParts.length;
-    crown(leafParts, cx, cy, cz, s, 9 + Math.round(s * 4), s * 1.25, r, centre, tint);
+    crown(leafParts, cx, cy, cz, s, 5 + Math.round(s * 2.2), s * 1.45, r, centre, tint);
     for (let k = before + 1; k < leafParts.length; k++) shadeVertices(leafParts[k], () => tint);
   }
   return { trunk: merge(parts), leaves: finishCrown(merge(leafParts), centre) };
@@ -292,7 +292,7 @@ export function bushGeometry(seed) {
   for (let i = 0; i < 3; i++) {
     const s = 0.6 + r() * 0.4;
     const before = parts.length;
-    crown(parts, (r() - 0.5) * 0.9, 0.45 + r() * 0.3, (r() - 0.5) * 0.9, s, 7, s * 1.3, r, centre);
+    crown(parts, (r() - 0.5) * 0.9, 0.45 + r() * 0.3, (r() - 0.5) * 0.9, s, 5, s * 1.45, r, centre);
     for (let k = before + 1; k < parts.length; k++) shadeVertices(parts[k], () => [1, 1, 1]);
   }
   return finishCrown(merge(parts), centre, 0.45);

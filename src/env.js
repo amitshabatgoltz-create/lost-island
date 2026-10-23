@@ -91,7 +91,7 @@ export function createEnvironment(renderer) {
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
   const sc = sun.shadow.camera;
-  sc.left = -48; sc.right = 48; sc.top = 48; sc.bottom = -48; sc.near = 1; sc.far = 260;
+  sc.left = -40; sc.right = 40; sc.top = 40; sc.bottom = -40; sc.near = 1; sc.far = 240;
   sun.shadow.bias = -0.00025;
   sun.shadow.normalBias = 0.05;
   scene.add(sun, sun.target);
@@ -153,9 +153,9 @@ export function createEnvironment(renderer) {
       renderer.toneMappingExposure = preset.exposure;
     },
     setShadows(on) { sun.castShadow = on; },
-    // 4096 shadow map on the high setting: crisp contact shadows across the whole 96 m shadow area
+    // shadow map resolution per quality setting (the 80 m shadow area is kept tight around the view)
     setShadowQuality(high) {
-      const n = high ? 4096 : 2048;
+      const n = high ? 2048 : 1024;
       if (sun.shadow.mapSize.x === n) return;
       sun.shadow.mapSize.set(n, n);
       if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }
@@ -170,7 +170,7 @@ export function createEnvironment(renderer) {
       if (camera) {
         camera.getWorldDirection(camDir);
         camDir.y = 0;
-        if (camDir.lengthSq() > 1e-4) center.addScaledVector(camDir.normalize(), 16);
+        if (camDir.lengthSq() > 1e-4) center.addScaledVector(camDir.normalize(), 12);
       }
       focus = center;
       lsRight.crossVectors(UP, d).normalize();

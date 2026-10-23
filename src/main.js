@@ -756,7 +756,7 @@ function resume() {
   requestPointer();
 }
 
-// graphics quality: high = post-processing, detailed terrain blending, 4096 shadows; low = plain render
+// graphics quality: high = post-processing, detailed terrain blending, 2048 shadows; low = plain render, 1024 shadows
 function applyQuality() {
   const high = settings.hq !== false && !params.has('lowfx');
   post.enabled = high;
@@ -1061,6 +1061,7 @@ if (DEBUG) {
     showHint,
     renderFrame,
     post,
+    GFXdetail: GFX.detail,
   };
 }
 

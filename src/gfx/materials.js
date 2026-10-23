@@ -122,8 +122,11 @@ export function triplanar(mat, tex, scale = 0.5, { normalStrength = 1 } = {}) {
 // ------------------------------------------------------------------ foliage
 // Leaf cards: alpha-tested atlas, wind sway (instanced), and light passing through the leaves when back-lit.
 export function foliageMaterial(shared, strength = 0.04, { translucency = 0.35, roughness = 0.78 } = {}) {
-  const m = new THREE.MeshStandardMaterial({
-    color: 0xffffff, vertexColors: true, roughness, metalness: 0, map: foliageAtlas(),
+  // Lambert: leaves are drawn in several alpha-tested layers (no early depth rejection), so a cheap
+  // diffuse model matters far more here than anywhere else; specular adds nothing visible on foliage.
+  void roughness;
+  const m = new THREE.MeshLambertMaterial({
+    color: 0xffffff, vertexColors: true, map: foliageAtlas(),
     alphaTest: 0.5, side: THREE.DoubleSide,
   });
   m.onBeforeCompile = (sh) => {
