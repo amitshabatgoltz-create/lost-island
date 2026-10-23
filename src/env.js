@@ -5,12 +5,13 @@ import { Sky } from 'three/addons/objects/Sky.js';
 
 // late-morning sun from the south-west: high enough to model shapes, low enough for long soft shadows
 export const SUN_DIR = new THREE.Vector3(-0.55, 0.52, 0.65).normalize();
+const SKY_GAIN = 0.42;
 const MOON_DIR = new THREE.Vector3(0.45, 0.62, 0.64).normalize();
 
 const PRESETS = {
   day: {
     fog: 0x9cb6cc, fogDensity: 0.0036, sky: true, hemiSky: 0xa9c6e8, hemiGround: 0x5e4f38, hemi: 0.5,
-    light: 0xffe1bb, lightI: 3.0, dir: SUN_DIR, envI: 0.45, exposure: 0.88, moon: false,
+    light: 0xffe1bb, lightI: 3.0, dir: SUN_DIR, envI: 0.9, exposure: 0.88, moon: false,
   },
   night: {
     fog: 0x15202e, fogDensity: 0.012, sky: false, hemiSky: 0x5a74a8, hemiGround: 0x1c1c22, hemi: 0.6,
@@ -64,6 +65,9 @@ export function createEnvironment(renderer) {
   su.mieDirectionalG.value = 0.82;
   su.sunPosition.value.copy(SUN_DIR).multiplyScalar(1000);
   sky.userData.shared = true;
+  // the raw Sky shader is far brighter than the lit scene and tone-maps to a white haze; scale it down
+  const dimSky = (m, k) => { m.fragmentShader = m.fragmentShader.replace('gl_FragColor = vec4( retColor, 1.0 );', `gl_FragColor = vec4( retColor * ${k.toFixed(2)}, 1.0 );`); };
+  dimSky(sky.material, SKY_GAIN);
   scene.add(sky);
 
   const pmrem = new THREE.PMREMGenerator(renderer);
@@ -71,6 +75,7 @@ export function createEnvironment(renderer) {
   const sky2 = new Sky();
   sky2.scale.setScalar(1000);
   sky2.material.uniforms.sunPosition.value.copy(su.sunPosition.value);
+  dimSky(sky2.material, SKY_GAIN);
   ['turbidity', 'rayleigh', 'mieCoefficient', 'mieDirectionalG'].forEach((k) => (sky2.material.uniforms[k].value = su[k].value));
   skyScene.add(sky2);
   const envTex = pmrem.fromScene(skyScene, 0, 0.1, 2000).texture;

@@ -202,8 +202,11 @@ function buildSea(shared) {
     const fn = `
       uniform float uTime;
       varying vec3 vWp;
+      float shoreZv(float x){ return 28.0 + 7.0*sin(x*0.045+1.3) + 3.0*sin(x*0.12); }
+      // waves calm down near the beach so the surface never rises above the wet sand
       float wH(vec2 p){
-        return sin(p.x*0.12 + uTime*0.9)*0.18 + sin(p.y*0.21 - uTime*1.3 + p.x*0.05)*0.22 + sin((p.x+p.y)*0.35 + uTime*1.7)*0.07;
+        float calm = smoothstep(-2.0, 14.0, p.y - shoreZv(p.x));
+        return (sin(p.x*0.12 + uTime*0.9)*0.18 + sin(p.y*0.21 - uTime*1.3 + p.x*0.05)*0.22 + sin((p.x+p.y)*0.35 + uTime*1.7)*0.07) * (0.15 + 0.85 * calm) - 0.06 * (1.0 - calm);
       }`;
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\n' + fn)
@@ -218,6 +221,7 @@ function buildSea(shared) {
         float shoreZ(float x){ return 28.0 + 7.0*sin(x*0.045+1.3) + 3.0*sin(x*0.12); }`)
       .replace('#include <color_fragment>', `#include <color_fragment>
         float dd = vWp.z - shoreZ(vWp.x);
+        if (dd < -1.0) discard; // never draw the sea inland, under the beach
         float edgeFade = 1.0 - smoothstep(70.0, 85.0, abs(vWp.x));
         // two scrolling ripple layers: small chop on top of the big vertex waves
         vec2 rp = vWp.xz;
