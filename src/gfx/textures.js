@@ -206,12 +206,12 @@ export const dirtTex = () => cached('dirt', () => {
   }
   c.putImageData(id, 0, 0); hc.putImageData(hd, 0, 0);
   const r = rng(33);
-  for (let n = 0; n < 700; n++) {
-    const x = r() * S, y = r() * S, rad = 1.5 + r() * r() * 7, ell = 0.6 + r() * 0.4, rot = r() * Math.PI;
+  for (let n = 0; n < 320; n++) {
+    const x = r() * S, y = r() * S, rad = 1.5 + r() * r() * 6, ell = 0.6 + r() * 0.4, rot = r() * Math.PI;
     const g = 110 + r() * 70, warm = r() * 14;
     wrapped(S, S, x, y, rad + 2, (xx, yy) => {
       const grd = c.createRadialGradient(xx - rad * 0.3, yy - rad * 0.3, 0, xx, yy, rad);
-      grd.addColorStop(0, rgb(g + 35 + warm, g + 30, g + 22)); grd.addColorStop(1, rgb(g * 0.6 + warm, g * 0.56, g * 0.5));
+      grd.addColorStop(0, rgb(g + 22 + warm, g + 18, g + 12)); grd.addColorStop(1, rgb(g * 0.75 + warm, g * 0.7, g * 0.62));
       c.fillStyle = grd; c.beginPath(); c.ellipse(xx, yy, rad, rad * ell, rot, 0, 7); c.fill();
       const hg = hc.createRadialGradient(xx, yy, 0, xx, yy, rad);
       hg.addColorStop(0, '#fff'); hg.addColorStop(1, '#777');
