@@ -64,7 +64,7 @@ export function createPost(renderer) {
       bloom.strength = night ? 0.55 : 0.28;
       bloom.threshold = night ? 0.55 : 0.9;
       grade.uniforms.uSat.value = night ? 1.0 : 1.1;
-      grade.uniforms.uVignette.value = night ? 0.42 : 0.3;
+      grade.uniforms.uVignette.value = night ? 0.34 : 0.3;
       grade.uniforms.uTint.value.set(...(night ? [0.96, 0.99, 1.04] : [1.0, 0.99, 0.965]));
     },
   };

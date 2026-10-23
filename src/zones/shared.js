@@ -196,7 +196,7 @@ function finishCrown(geo, centre, up = 0.6) {
   for (let i = 0; i < p.count; i++) maxD = Math.max(maxD, Math.hypot(p.getX(i) - centre.x, (p.getY(i) - centre.y) * 1.3, p.getZ(i) - centre.z));
   for (let i = 0; i < p.count; i++) {
     const dy = (p.getY(i) - centre.y) / maxD, dd = Math.hypot(p.getX(i) - centre.x, (p.getY(i) - centre.y) * 1.3, p.getZ(i) - centre.z) / maxD;
-    const k = Math.min(1.15, 0.5 + dd * 0.45 + dy * 0.25);
+    const k = Math.min(1.25, 0.68 + dd * 0.42 + dy * 0.22);
     cols.setXYZ(i, cols.getX(i) * k, cols.getY(i) * k, cols.getZ(i) * k);
   }
   return geo;

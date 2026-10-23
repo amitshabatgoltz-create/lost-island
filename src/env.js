@@ -14,8 +14,8 @@ const PRESETS = {
     light: 0xffe1bb, lightI: 3.0, dir: SUN_DIR, envI: 0.9, exposure: 0.88, moon: false,
   },
   night: {
-    fog: 0x15202e, fogDensity: 0.012, sky: false, hemiSky: 0x5a74a8, hemiGround: 0x1c1c22, hemi: 0.6,
-    light: 0x9fb8ec, lightI: 1.15, dir: MOON_DIR, envI: 0.1, exposure: 1.12, moon: true,
+    fog: 0x1a2738, fogDensity: 0.012, sky: false, hemiSky: 0x6a86bc, hemiGround: 0x22222a, hemi: 0.95,
+    light: 0xa6bff0, lightI: 1.45, dir: MOON_DIR, envI: 0.25, exposure: 1.3, moon: true,
   },
 };
 

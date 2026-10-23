@@ -150,7 +150,9 @@ export function foliageMaterial(shared, strength = 0.04, { translucency = 0.35, 
         float back = pow(max(0.0, dot(-geometryViewDir, directionalLights[0].direction)), 2.0);
         reflectedLight.directDiffuse += diffuseColor.rgb * directionalLights[0].color * (${translucency.toFixed(2)} * (0.25 + back));
       }
-      #endif`);
+      #endif
+      // light scattered through the canopy: more ambient fill than a solid surface (scales with the scene, so nights stay dark)
+      reflectedLight.indirectDiffuse *= 1.7;`);
   };
   m.customProgramCacheKey = () => 'foliage' + strength + translucency;
   return m;
