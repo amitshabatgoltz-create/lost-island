@@ -8,24 +8,6 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 
 const roundedBox = (w, h, d, r) => scaleUV(new RoundedBoxGeometry(w, h, d, 2, r), 3, 3);
 
-export function grainTexture() {
-  const s = 256, cv = document.createElement('canvas');
-  cv.width = cv.height = s;
-  const ctx = cv.getContext('2d');
-  const img = ctx.createImageData(s, s);
-  const r = mulberry32(7);
-  for (let i = 0; i < s * s; i++) {
-    const v = 200 + r() * 55;
-    img.data[i * 4] = v; img.data[i * 4 + 1] = v; img.data[i * 4 + 2] = v; img.data[i * 4 + 3] = 255;
-  }
-  ctx.putImageData(img, 0, 0);
-  const t = new THREE.CanvasTexture(cv);
-  t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.repeat.set(90, 90);
-  t.colorSpace = THREE.SRGBColorSpace;
-  return t;
-}
-
 export function jitterGeometry(geo, amount, freq = 1, seed = 1) {
   const p = geo.attributes.position;
   for (let i = 0; i < p.count; i++) {
@@ -119,26 +101,6 @@ export function stencilTexture(text) {
   const t = new THREE.CanvasTexture(cv);
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
-}
-
-export function swayMaterial(params, shared, strength = 0.05) {
-  const m = new THREE.MeshStandardMaterial(params);
-  m.onBeforeCompile = (sh) => {
-    sh.uniforms.uTime = shared.time;
-    sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nuniform float uTime;')
-      .replace('#include <begin_vertex>', `#include <begin_vertex>
-        #ifdef USE_INSTANCING
-          vec3 ip = instanceMatrix[3].xyz;
-        #else
-          vec3 ip = vec3(0.0);
-        #endif
-        float hh = max(position.y - 0.4, 0.0);
-        float sw = sin(uTime*1.25 + ip.x*0.31 + ip.z*0.17) + 0.4*sin(uTime*2.7 + ip.z*0.5);
-        transformed.x += sw * ${strength.toFixed(3)} * hh;
-        transformed.z += cos(uTime*1.05 + ip.x*0.21) * ${(strength * 0.6).toFixed(3)} * hh;`);
-  };
-  return m;
 }
 
 // ------------------------------------------------------------------ vegetation geometry
