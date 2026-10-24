@@ -9,13 +9,64 @@ import { loadTorch } from './gfx/torch.js';
 
 const tmpV = new THREE.Vector3();
 const tmpAim = new THREE.Vector3();
+const tmpQ = new THREE.Quaternion(), tmpQ2 = new THREE.Quaternion();
+const UP = new THREE.Vector3(0, 1, 0);
+
+// a clip's mirror image (left <-> right), for the left turn made from Turning Right 90
+function mirrorClip(clip, name) {
+  const tracks = clip.tracks.map((t) => {
+    const c = t.clone();
+    c.name = t.name.replace(/Left|Right/, (m) => (m === 'Left' ? 'Right' : 'Left'));
+    const v = c.values;
+    if (t.name.endsWith('.quaternion')) for (let i = 0; i < v.length; i += 4) { v[i + 1] *= -1; v[i + 2] *= -1; }
+    else if (t.name.endsWith('.position')) for (let i = 0; i < v.length; i += 3) v[i] *= -1;
+    return c;
+  });
+  return new THREE.AnimationClip(name, clip.duration, tracks);
+}
+
+// body yaw of a clip's hips at time t (radians around the vertical)
+function hipsYaw(clip, t) {
+  const tr = clip && clip.tracks.find((x) => x.name === `${HIPS}.quaternion`);
+  if (!tr) return 0;
+  const q = new THREE.Quaternion().fromArray(tr.createInterpolant().evaluate(t));
+  const v = new THREE.Vector3(0, 0, 1).applyQuaternion(q);
+  return Math.atan2(v.x, v.z);
+}
+
+// the time in clip `b` whose leg pose best matches clip `a` at time `ta` (so one can pick up where the other ends)
+function legPhase(a, ta, b) {
+  const legs = ['LeftUpLeg', 'RightUpLeg', 'LeftLeg', 'RightLeg'].map((n) => {
+    const f = (c) => c.tracks.find((t) => t.name === `mixamorig10${n}.quaternion`);
+    return f(a) && f(b) ? [f(a).createInterpolant(), f(b).createInterpolant()] : null;
+  }).filter(Boolean);
+  const target = legs.map(([x]) => Array.from(x.evaluate(ta)));
+  let best = -Infinity, phase = 0;
+  for (let t = 0; t < b.duration; t += 1 / 60) {
+    let score = 0;
+    legs.forEach(([, y], i) => { const q = y.evaluate(t); score += Math.abs(q[0] * target[i][0] + q[1] * target[i][1] + q[2] * target[i][2] + q[3] * target[i][3]); });
+    if (score > best) { best = score; phase = t; }
+  }
+  return phase;
+}
 const MODEL_URL = './models/survivor.glb';
 // extra clips (tools/anims/README.md); a clip here replaces survivor.glb's clip of the same name
-const ANIM_URLS = ['./models/anims/start_walking.glb'];
+const ANIM_URLS = ['start_walking', 'torch_start_walking', 'stop_walking', 'idle_to_running', 'turn_right_90', 'jump'].map((n) => `./models/anims/${n}.glb`);
 const SCALE = 0.0104; // the model is authored in centimetres, 176 cm tall
 const WALK = 2.8, RUN = 5.8; // m/s
-const START_WALK_RATE = 1.7; // Start_Walking is a slower stroll than Walking: sped up to meet it
-const START_WALK_END = 1.3; // clip time where the first steps are done and the walk cycle takes over
+// first steps from standing: Start_Walking (and its flashlight version) is a slower stroll than Walking, so it is sped
+// up to meet it; `to` is the clip time where the first steps are done and the walk cycle takes over
+const START = {
+  Start_Walking: { rate: 1.7, from: 0.25, to: 1.3 },
+  Torch_Start_Walking: { rate: 2.1, from: 0.3, to: 1.4 },
+};
+// clips whose forward travel moves the player (the hips travel is taken back out), by how they end
+const DRIVE = { Start_Walking: 'start', Torch_Start_Walking: 'start', Idle_To_Running: 'run', Stop_Walking: 'stop', Jump: 'jump' };
+// the flashlight clips (tools/anims) hold it in both hands; under the plain moves the upper body takes the same hold,
+// sampled from these clips at these times (standing / running)
+const HOLD_CLIPS = ['Torch_Start_Walking', 'Stop_Walking', 'Idle_To_Running', 'Jump', 'Turn_Right_90', 'Turn_Left_90'];
+const HOLD_POSE = { idle: ['Stop_Walking', 2.5], run: ['Idle_To_Running', 0.88] };
+const SPINE = 'mixamorig10Spine';
 const CLIP_WALK = 1.63 * SCALE * 100, CLIP_RUN = 4.0 * SCALE * 100; // ground speed the walk / run clips were authored at
 const HIPS = 'mixamorig10Hips';
 // the flashlight beam: a focused bright core with soft edges (penumbra) and a gentle falloff (decay below the physical 2
@@ -78,7 +129,9 @@ export class Player {
     this.flashlight.shadow.normalBias = 0.02;
     scene.add(this.flashlight, this.flashlight.target);
     this.flashlightOn = false;
-    this.torch = new THREE.Group(); // the flashlight model in the hand (shown while it is on)
+    this.holdTorch = false;
+    this.holdW = 0; // 0..1: how much the upper body takes the flashlight hold
+    this.torch = new THREE.Group(); // the flashlight model in the hand (shown once the flashlight is found)
     this.torch.visible = false;
     scene.add(this.torch);
     this.aimDir = new THREE.Vector3(0, -0.12, 1).normalize();
@@ -97,15 +150,23 @@ export class Player {
     ]);
     const clips = new Map(gltf.animations.map((c) => [c.name, c]));
     for (const g of extra) if (g) for (const c of g.animations) clips.set(c.name, c);
+    if (clips.has('Turn_Right_90')) clips.set('Turn_Left_90', mirrorClip(clips.get('Turn_Right_90'), 'Turn_Left_90'));
     this.clips = [...clips.values()];
+    // the flashlight clips stand with the hips turned to the right of the way they walk: the hold over the plain
+    // moves turns the upper body by the same amount
+    this.holdYaw = {
+      idle: hipsYaw(clips.get(HOLD_POSE.idle[0]), HOLD_POSE.idle[1]) - hipsYaw(clips.get('Idle'), 0),
+      run: hipsYaw(clips.get(HOLD_POSE.run[0]), HOLD_POSE.run[1]) - hipsYaw(clips.get('Running'), 0),
+    };
     if (torch) {
       torch.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = true; o.material.emissive.setHex(0xfff0d8); this.torchLens = o.material; } });
+      torch.scale.setScalar(1.25); // a big hand torch, easy to see in the survivor's hand
       this.torch.add(torch);
       this.setFlashlight(this.flashlightOn);
     }
     this.baseHipsY = gltf.scene.getObjectByName(HIPS).position.y;
     this.skins = { [SKINS[0].id]: Promise.resolve(this.prepareSkin(gltf.scene, SKINS[0])) };
-    this.yawDelta = { Walking_Turn_180: -3.12, Climbing_Down: -1.55, Start_Climbing_Ladder: 3.1 }; // body turn at the end of a clip
+    this.yawDelta = { Walking_Turn_180: -3.12, Climbing_Down: -1.55, Start_Climbing_Ladder: 3.1, Turn_Right_90: -1.55, Turn_Left_90: 1.55 }; // body turn at the end of a clip
     await this.setSkin(skinId);
   }
 
@@ -162,7 +223,22 @@ export class Player {
     mesh.getObjectByName('mixamorig10RightForeArm').add(bandage);
     mesh.updateMatrixWorld(true);
     const unit = hips.parent.getWorldScale(new THREE.Vector3()).x; // metres per hips-track unit
-    return { skin, mesh, clips, bandage, hips, unit, head: mesh.getObjectByName('mixamorig10Head'), hand: mesh.getObjectByName('mixamorig10RightHand'), k };
+    // the two-handed flashlight hold: every bone from the spine up, at the standing and the running hold
+    let holdPose = null;
+    const ci = clips.find((c) => c.name === HOLD_POSE.idle[0]), cr = clips.find((c) => c.name === HOLD_POSE.run[0]);
+    if (ci && cr) {
+      holdPose = [];
+      mesh.getObjectByName(SPINE).traverse((b) => {
+        const f = (c) => c.tracks.find((t) => t.name === `${b.name}.quaternion`);
+        if (!b.isBone || !f(ci) || !f(cr)) return;
+        holdPose.push({
+          bone: b,
+          idle: new THREE.Quaternion().fromArray(f(ci).createInterpolant().evaluate(HOLD_POSE.idle[1])),
+          run: new THREE.Quaternion().fromArray(f(cr).createInterpolant().evaluate(HOLD_POSE.run[1])),
+        });
+      });
+    }
+    return { skin, mesh, clips, bandage, hips, unit, head: mesh.getObjectByName('mixamorig10Head'), hand: mesh.getObjectByName('mixamorig10RightHand'), k, holdPose };
   }
 
   // wear a skin: swaps the character mesh and rebuilds the animation mixer for its skeleton
@@ -181,6 +257,8 @@ export class Player {
     this.head = rec.head;
     this.hand = rec.hand;
     this.handK = rec.k;
+    this.holdPose = rec.holdPose;
+    this.torchRel = null;
     this.skinId = rec.skin.id;
 
     this.mixer = new THREE.AnimationMixer(mesh);
@@ -193,31 +271,21 @@ export class Player {
       const v = tr.values, n = v.length;
       this.hipsDelta[clip.name] = new THREE.Vector3(v[n - 3] - v[0], v[n - 2] - v[1], v[n - 1] - v[2]);
     }
-    // Start_Walking carries its own forward travel: the player moves at the clip's pace so the first steps do not
-    // slide, and the hips travel is taken back out (null for an in-place version of the clip)
-    const sw = rec.clips.find((c) => c.name === 'Start_Walking');
-    const swHips = sw && sw.tracks.find((t) => t.name === `${HIPS}.position`);
-    this.startWalk = swHips && this.hipsDelta.Start_Walking.z * rec.unit > 0.5
-      ? { hips: swHips.createInterpolant(), p0: new THREE.Vector3().fromArray(swHips.values), unit: rec.unit }
-      : null;
-    if (this.startWalk) {
-      const sw0 = this.startWalk;
-      // the clip's walking pace once under way (m/s at timeScale 1), for keeping the feet planted while it fades out
-      sw0.pace = (sw0.hips.evaluate(sw.duration)[2] - sw0.hips.evaluate(1)[2]) / (sw.duration - 1) * rec.unit;
-      // the Walking cycle time whose legs match the end of the first steps, so the walk picks up in step
-      const walk = rec.clips.find((c) => c.name === 'Walking');
-      const legs = ['LeftUpLeg', 'RightUpLeg', 'LeftLeg', 'RightLeg'].map((b) => {
-        const f = (c) => c.tracks.find((t) => t.name === `mixamorig10${b}.quaternion`);
-        return f(sw) && f(walk) ? [f(sw).createInterpolant(), f(walk).createInterpolant()] : null;
-      }).filter(Boolean);
-      const target = legs.map(([a]) => Array.from(a.evaluate(START_WALK_END)));
-      let best = -Infinity;
-      sw0.walkPhase = 0;
-      for (let t = 0; t < walk.duration; t += 1 / 60) {
-        let score = 0;
-        legs.forEach(([, w], i) => { const q = w.evaluate(t); score += Math.abs(q[0] * target[i][0] + q[1] * target[i][1] + q[2] * target[i][2] + q[3] * target[i][3]); });
-        if (score > best) { best = score; sw0.walkPhase = t; }
-      }
+    // clips that carry their own forward travel: the player moves at the clip's pace so the steps do not slide, and
+    // the hips travel is taken back out (a clip without real travel, like an in-place version, is left alone)
+    this.drives = {};
+    for (const [name, kind] of Object.entries(DRIVE)) {
+      const clip = rec.clips.find((c) => c.name === name);
+      const tr = clip && clip.tracks.find((t) => t.name === `${HIPS}.position`);
+      if (!tr || this.hipsDelta[name].z * rec.unit < 0.5) continue;
+      const d = { kind, hips: tr.createInterpolant(), p0: new THREE.Vector3().fromArray(tr.values), unit: rec.unit };
+      this.drives[name] = d;
+      // the walk (run) cycle time whose legs match the end of the first steps, so the cycle picks up in step
+      if (kind === 'start') {
+        d.phase = legPhase(clip, START[name].to, rec.clips.find((c) => c.name === 'Walking'));
+        // the clip's walking pace once under way (m/s at timeScale 1), for keeping the feet planted while it fades out
+        d.pace = (d.hips.evaluate(clip.duration)[2] - d.hips.evaluate(clip.duration - 0.45)[2]) / 0.45 * rec.unit;
+      } else if (kind === 'run') d.phase = legPhase(clip, clip.duration - 0.02, rec.clips.find((c) => c.name === 'Running'));
     }
     // walk / run / idle blend: always playing, weights set every frame
     for (const n of ['Idle', 'Breathing_Idle', 'Walking', 'Running']) {
@@ -251,8 +319,13 @@ export class Player {
     this.flashlight.intensity = this.torchPower();
     // the light stays in the scene (no shader rebuild on F); while off its shadow map is not redrawn
     this.flashlight.shadow.autoUpdate = on;
-    this.torch.visible = on && this.torch.children.length > 0;
     if (this.torchLens) this.torchLens.emissiveIntensity = on ? 1.2 : 0;
+  }
+
+  // the survivor carries the flashlight (in both hands) from the moment it is found, on or off
+  holdFlashlight(v) {
+    this.holdTorch = v;
+    this.torch.visible = v && this.torch.children.length > 0;
   }
 
   // flashlight shadows follow the game's shadow setting (one extra 512² pass while the light is on)
@@ -260,7 +333,7 @@ export class Player {
 
   // the beam goes where the camera looks: mouse left/right turns it, mouse up/down raises and lowers it
   updateFlashlight(dt) {
-    if (!this.flashlightOn) { this.followCam = false; return; }
+    if (!this.flashlightOn && !this.holdTorch) { this.followCam = false; return; }
     const want = tmpAim;
     if (this.followCam) {
       // the default camera pitch (0.32) aims a little down, at the ground ~10 m ahead
@@ -274,19 +347,26 @@ export class Player {
     }
     this.followCam = false;
     this.aimDir.lerp(want, Math.min(1, dt * 14)).normalize();
-    // the flashlight sits in the right hand's grip and points along the aim
+    // the flashlight sits in the right hand's grip and points along the aim while the hands hold it up; when the
+    // hands are busy (picking up, climbing, sitting) it simply stays in the hand
     this.model.root.updateMatrixWorld(true);
     const t = this.torch;
     if (this.hand) this.hand.localToWorld(t.position.set(0, 8.5 * this.handK, 2.5 * this.handK));
     else t.position.copy(this.pos).add(tmpV.set(0, 1.1, 0));
     t.lookAt(tmpV.copy(t.position).add(this.aimDir));
+    if (this.hand) {
+      const hq = this.hand.getWorldQuaternion(tmpQ);
+      if (this.holdW > 0.95 || !this.torchRel) this.torchRel = (this.torchRel || new THREE.Quaternion()).copy(hq).invert().multiply(t.quaternion);
+      else t.quaternion.slerp(tmpQ2.copy(hq).multiply(this.torchRel), 1 - this.holdW);
+    }
     t.updateMatrixWorld();
+    const dir = tmpAim.set(0, 0, 1).applyQuaternion(t.quaternion);
     // the light leaves from the lens, just clear of the hand so the arm does not shadow it
-    this.flashlight.position.copy(t.position).addScaledVector(this.aimDir, 0.14);
-    this.flashlight.target.position.copy(this.flashlight.position).add(this.aimDir);
+    this.flashlight.position.copy(t.position).addScaledVector(dir, 0.14);
+    this.flashlight.target.position.copy(this.flashlight.position).add(dir);
     this.flashlight.target.updateMatrixWorld();
     // where the lower edge of the bright core meets the ground: a close hit dims the beam (an eye adapting to the spot)
-    const o = this.flashlight.position, a = this.aimDir;
+    const o = this.flashlight.position, a = dir;
     const h = Math.hypot(a.x, a.z), e = Math.atan2(a.y, h) - TORCH_ANGLE * (1 - TORCH_PENUMBRA);
     const ex = h > 1e-4 ? a.x / h * Math.cos(e) : 0, ez = h > 1e-4 ? a.z / h * Math.cos(e) : 0, ey = Math.sin(e);
     let hit = TORCH_NEAR;
@@ -378,11 +458,18 @@ export class Player {
     this.play('Stand_To_Sit', { reverse: true, timeScale: 1.25, lock: true, fadeIn: 0.15, fadeOut: 0.3 });
   }
 
-  // Start_Walking's forward ground speed (m/s at timeScale 1) at clip time t, from its hips travel
-  startWalkSpeed(t) {
-    const h = 1 / 30, i = this.startWalk.hips;
+  // a travelling clip's forward ground speed (m/s at timeScale 1) at clip time t, from its hips travel
+  driveSpeed(d, t) {
+    const h = 1 / 30, i = d.hips;
     const z1 = i.evaluate(Math.max(0, t - h))[2], z2 = i.evaluate(t + h)[2];
-    return Math.max(0, (z2 - z1) / (2 * h)) * this.startWalk.unit;
+    return Math.max(0, (z2 - z1) / (2 * h)) * d.unit;
+  }
+
+  // Space: a leap forward (the Jump clip's run-up is skipped)
+  jump() {
+    if (!this.mixer || !this.drives.Jump || this.busy || (this.act && this.act.name === 'Jump')) return;
+    this.cancelAction();
+    this.play('Jump', { timeScale: 1.2, from: 1.05, to: 2.45, lock: true, fadeIn: 0.15, fadeOut: 0.3 });
   }
 
   // rotate camera from mouse deltas
@@ -426,25 +513,43 @@ export class Player {
       } else if (!holdFacing) {
         this.facing += d * Math.min(1, dt * 12);
       }
-      // first step from standing still: the weight shift and the first steps of the Start_Walking clip
-      if (this.still && !this.act && this.mixer && !running) {
-        if (this.startWalk) this.play('Start_Walking', { timeScale: START_WALK_RATE, from: 0.25, to: START_WALK_END, fadeIn: 0.1, fadeOut: 0.3 });
+      // first step from standing still: the weight shift and the first steps of the Start_Walking clip (holding the
+      // flashlight: its flashlight version, and Idle_To_Running for breaking straight into a run)
+      if (this.still && !this.act && this.mixer) {
+        const n = this.holdTorch && this.drives.Torch_Start_Walking ? 'Torch_Start_Walking' : 'Start_Walking';
+        if (running) {
+          if (this.holdTorch && this.drives.Idle_To_Running) this.play('Idle_To_Running', { timeScale: 1.2, from: 0.3, fadeIn: 0.12, fadeOut: 0.25 });
+        } else if (this.drives[n]) this.play(n, { timeScale: START[n].rate, from: START[n].from, to: START[n].to, fadeIn: 0.1, fadeOut: 0.3 });
         else this.play('Start_Walking', { timeScale: 1.6, to: 0.85, fadeIn: 0.1, fadeOut: 0.35 });
       }
       this.moveDir = { x: mx, z: mz };
       this.still = false;
-    } else if (this.speed < 0.2) this.still = true;
-    // during the first steps the clip sets the pace; letting go or breaking into a run blends straight out
-    const sw = this.act && this.act.name === 'Start_Walking' && this.startWalk ? this.act : null;
-    if (sw && !sw.ending) {
-      if (!(mx || mz) || running || this.busy) sw.ending = true;
-      else if (sw.action.time >= sw.to) {
-        sw.ending = true;
-        this.actions.Walking.time = this.startWalk.walkPhase;
-      } else this.speed = this.startWalkSpeed(sw.action.time) * sw.action.timeScale;
+    } else {
+      // letting go of a walk while holding the flashlight: the last steps of Stop_Walking
+      if (this.holdTorch && controlEnabled && !this.still && !this.act && this.mixer && this.drives.Stop_Walking && this.speed > 1.2 && this.speed < WALK + 0.6) {
+        this.play('Stop_Walking', { timeScale: 1.6, from: 0.9, to: 2.3, fadeIn: 0.15, fadeOut: 0.35 });
+      }
+      if (this.speed < 0.2) this.still = true;
+    }
+    // while a travelling clip plays it sets the pace; the first steps blend straight out when the player lets go or
+    // breaks into a run, the last steps when the player moves again
+    const dr = this.act && this.drives[this.act.name] ? this.act : null;
+    const drive = dr && this.drives[dr.name];
+    if (dr && !dr.ending) {
+      const moving = !!(mx || mz);
+      if (drive.kind === 'start' && (!moving || running || this.busy)) dr.ending = true;
+      else if (drive.kind === 'run' && (!moving || !running || this.busy)) dr.ending = true;
+      else if (drive.kind === 'stop' && (moving || this.busy)) dr.ending = true;
+      else if ((drive.kind === 'start' || drive.kind === 'run') && dr.action.time >= dr.to - 0.02) {
+        dr.ending = true;
+        this.actions[drive.kind === 'start' ? 'Walking' : 'Running'].time = drive.phase;
+      } else {
+        this.speed = this.driveSpeed(drive, dr.action.time) * dr.action.timeScale;
+        if (drive.kind === 'stop' || drive.kind === 'jump') this.moveDir = { x: Math.sin(this.facing), z: Math.cos(this.facing) };
+      }
     }
     // fading out into the walk: the clip keeps pace with the ground so its planted foot does not slide
-    if (sw && sw.ending) sw.action.timeScale = Math.max(0.5, Math.min(3.5, this.speed / this.startWalk.pace));
+    if (dr && dr.ending && drive.kind === 'start') dr.action.timeScale = Math.max(0.5, Math.min(3.5, this.speed / drive.pace));
     if (this.speed > 0.01 && this.moveDir && !(this.act && this.act.root)) {
       const step = this.speed * dt;
       // move in two sub-steps for stable collisions
@@ -460,10 +565,14 @@ export class Player {
     this.breathT = Math.max(0, this.breathT - dt);
     this.breathK += ((this.breathT > 0 ? 1 : 0) - this.breathK) * Math.min(1, dt * 2);
 
-    // standing with the flashlight on: the survivor turns to face where the beam is aimed
-    if (this.flashlightOn && this.followCam && controlEnabled && !this.busy && !holdFacing && !(mx || mz)) {
+    // standing with the flashlight: the survivor turns to face where it is aimed (a quarter turn on the spot, or a
+    // smooth turn when no turning clip fits)
+    if ((this.flashlightOn || this.holdTorch) && this.followCam && controlEnabled && !this.busy && !holdFacing && !(mx || mz) && this.speed < 0.3) {
       const d = wrap(this.camYaw + Math.PI - this.facing);
-      if (Math.abs(d) > 0.9) this.facing += d * Math.min(1, dt * 4);
+      const turn = d < 0 ? 'Turn_Right_90' : 'Turn_Left_90';
+      if (Math.abs(d) > 1.2 && this.holdTorch && !this.act && this.actions[turn]) {
+        this.play(turn, { timeScale: 1.5, from: 0.3, to: 1.65, fadeIn: 0.15, fadeOut: 0, turn: this.yawDelta[turn], holdFacing: true });
+      } else if (Math.abs(d) > 0.9 && !this.act) this.facing += d * Math.min(1, dt * 4);
     }
 
     this.animate(dt);
@@ -537,16 +646,38 @@ export class Player {
       const d = this.hipsDelta[cur.name];
       this.hips.position.addScaledVector(d, -ease(cur.p) * Math.min(1, cur.w));
     }
-    // Start_Walking: the player root already moved, so hold its hips over the feet (also while it fades out)
-    if (this.startWalk) {
-      const a = this.actions.Start_Walking;
+    // travelling clips: the player root already moved, so hold their hips over the feet (also while they fade out)
+    for (const [name, d] of Object.entries(this.drives)) {
+      const a = this.actions[name];
       const w = a.isScheduled() ? a.getEffectiveWeight() : 0;
       if (w > 0) {
-        const v = this.startWalk.hips.evaluate(a.time), p0 = this.startWalk.p0;
-        this.hips.position.x -= (v[0] - p0.x) * w;
-        this.hips.position.z -= (v[2] - p0.z) * w;
+        const v = d.hips.evaluate(a.time);
+        this.hips.position.x -= (v[0] - d.p0.x) * w;
+        this.hips.position.z -= (v[2] - d.p0.z) * w;
       }
     }
+    this.applyHold(dt);
+  }
+
+  // the two-handed flashlight hold over the plain idle / walk / run (the flashlight clips carry it themselves); it lets
+  // go while the hands are busy: picking up, climbing, sitting, the wake-up
+  applyHold(dt) {
+    const act = this.act;
+    const free = this.lying === 0 && !this.sitting && !(act && act.lock && !HOLD_CLIPS.includes(act.name));
+    this.holdW += ((this.holdTorch && free ? 1 : 0) - this.holdW) * Math.min(1, dt * 6);
+    if (this.holdW < 0.01 || !this.holdPose) return;
+    let clipW = 0;
+    for (const n of HOLD_CLIPS) { const a = this.actions[n]; if (a && a.isScheduled()) clipW += a.getEffectiveWeight(); }
+    const w = this.holdW * Math.max(0, 1 - clipW);
+    if (w <= 0) return;
+    const run = clamp01((this.speed - WALK) / (RUN - WALK));
+    for (const b of this.holdPose) b.bone.quaternion.slerp(tmpQ.copy(b.idle).slerp(b.run, run), w);
+    // turn the upper body like the clips' stance (about the vertical, in the hips' own frame)
+    const spine = this.holdPose[0].bone;
+    const yaw = (this.holdYaw.idle + (this.holdYaw.run - this.holdYaw.idle) * run) * w;
+    spine.parent.getWorldQuaternion(tmpQ).invert();
+    tmpV.copy(UP).applyQuaternion(tmpQ).normalize();
+    spine.quaternion.premultiply(tmpQ2.setFromAxisAngle(tmpV, yaw));
   }
 
   // world position of the head (used by the wake-up camera)

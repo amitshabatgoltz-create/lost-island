@@ -472,6 +472,7 @@ function refreshHUD(justAdded) {
   ui.setHintAvailable(!!(q.hints && q.hints.length));
   ui.setInventory(s, player.flashlightOn, justAdded);
   player.showBandage(has('bandage'));
+  player.holdFlashlight(has('flashlight'));
   if (game.zone) game.zone.sync(s);
 }
 
@@ -943,7 +944,10 @@ window.addEventListener('keydown', (e) => {
   game.input[e.code] = true;
   if (e.repeat) return;
   switch (e.code) {
-    case 'Space': skipIntro(); break;
+    case 'Space':
+      if (game.mode === 'play') player.jump();
+      else skipIntro();
+      break;
     case 'KeyE':
       if (game.mode === 'play') interact();
       else if (game.mode === 'scope') closeScope();
