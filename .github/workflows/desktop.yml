@@ -1,0 +1,59 @@
+name: Build Windows game
+
+# Builds the Windows installer and puts it on the "LOST for PC" release page.
+# Runs on every push to main, or by hand from the Actions tab.
+# On pull requests it only checks that the build works.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths: ['desktop/**', '.github/workflows/desktop.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: desktop
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            desktop/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - name: Copy game into desktop app
+        shell: bash
+        run: rm -rf desktop/app && cp -r dist desktop/app
+      - run: npm ci
+        working-directory: desktop
+      - run: npm run dist
+        working-directory: desktop
+      - uses: actions/upload-artifact@v4
+        if: github.event_name == 'pull_request'
+        with:
+          name: LOST-windows
+          path: desktop/release/*.exe
+      - name: Publish release
+        if: github.event_name != 'pull_request'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete pc-latest --cleanup-tag --yes || true
+          gh release create pc-latest \
+            desktop/release/LOST-Setup.exe \
+            desktop/release/LOST-Portable.exe \
+            --target "$GITHUB_SHA" \
+            --title "LOST for PC (Windows)" \
+            --latest \
+            --notes "Download **LOST-Setup.exe** to install the game (adds a desktop icon), or **LOST-Portable.exe** to play without installing. Windows may show a blue 'Windows protected your PC' screen the first time: click 'More info' then 'Run anyway'."

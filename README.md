@@ -24,6 +24,18 @@ npm run preview    # מריץ את dist/ על http://localhost:4173
 - **גרירה:** `npm run build` ואז לגרור את התיקייה `dist` אל https://app.netlify.com/drop
 - **מ-Git:** לחבר את הריפו ב-Netlify. `netlify.toml` כבר מגדיר `npm run build` ו-`dist`.
 
+## גרסה למחשב (Windows)
+
+אפשר להוריד את המשחק ולהתקין אותו כמו כל משחק רגיל:
+https://github.com/amitshabatgoltz-create/lost-island/releases/latest
+
+- `LOST-Setup.exe` מתקין את המשחק ושם אייקון על שולחן העבודה.
+- `LOST-Portable.exe` מריץ את המשחק בלי התקנה.
+- בפעם הראשונה Windows עלול להציג מסך כחול "Windows protected your PC": ללחוץ "More info" ואז "Run anyway".
+- המשחק נפתח במסך מלא. F11 או Alt+Enter עוברים בין מסך מלא לחלון.
+
+הקובץ נבנה אוטומטית ב-GitHub Actions (`.github/workflows/desktop.yml`) בכל עדכון של `main`. הקוד של האפליקציה נמצא ב-`desktop/` (Electron). להרצה מקומית: `npm run build`, להעתיק את `dist` אל `desktop/app`, ואז בתוך `desktop/` להריץ `npm install`, `npx install-electron` ו-`npm start`.
+
 ## שליטה
 
 | מקש | פעולה |
