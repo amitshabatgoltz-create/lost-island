@@ -93,6 +93,7 @@ export class Lobby {
     p.speed = 0;
     p.setFlashlight(false);
     p.showBandage(false);
+    p.holdFlashlight(false);
     p.model.root.visible = true;
     // item sparkles are gameplay hints, not scenery; zone.sync() brings them back when play starts
     for (const it of zone.interactables || []) if (it.glint) it.glint.visible = false;

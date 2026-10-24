@@ -472,6 +472,7 @@ function refreshHUD(justAdded) {
   ui.setHintAvailable(!!(q.hints && q.hints.length));
   ui.setInventory(s, player.flashlightOn, justAdded);
   player.showBandage(has('bandage'));
+  player.holdFlashlight(has('flashlight'));
   if (game.zone) game.zone.sync(s);
 }
 
@@ -831,6 +832,7 @@ function applyQuality() {
 function applyShadowSetting() {
   renderer.shadowMap.enabled = settings.shadows;
   env.setShadows(settings.shadows);
+  if (player) player.setFlashlightShadows(settings.shadows);
   env.scene.traverse((o) => { if (o.material) [].concat(o.material).forEach((m) => (m.needsUpdate = true)); });
 }
 
@@ -942,7 +944,10 @@ window.addEventListener('keydown', (e) => {
   game.input[e.code] = true;
   if (e.repeat) return;
   switch (e.code) {
-    case 'Space': skipIntro(); break;
+    case 'Space':
+      if (game.mode === 'play') player.jump();
+      else skipIntro();
+      break;
     case 'KeyE':
       if (game.mode === 'play') interact();
       else if (game.mode === 'scope') closeScope();
@@ -1052,7 +1057,7 @@ function step(dt) {
   // flashlight flicker (tension beats)
   if (game.flicker > 0) {
     game.flicker -= dt;
-    if (player.flashlightOn) player.flashlight.intensity = game.flicker > 0 ? (Math.random() < 0.45 ? 0 : 15 + Math.random() * 30) : 40;
+    player.flicker = game.flicker > 0 ? (Math.random() < 0.45 ? 0 : 0.35 + Math.random() * 0.75) : 1;
   }
   env.update(dt, game.time, player.pos, camera);
   zone.update(dt, game.time, player.pos, camera);
