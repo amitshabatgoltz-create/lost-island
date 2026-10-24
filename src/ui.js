@@ -631,7 +631,7 @@ export class UI {
       const idx = (id) => wires.findIndex((w) => w.id === id);
       body.querySelector('.wire-svg').innerHTML = Object.entries(assign).map(([w, t]) => {
         const y1 = 25 + idx(w) * 50, y2 = 25 + (t - 1) * 50;
-        return `<path d="M100 ${y1} C55 ${y1} 45 ${y2} 0 ${y2}" stroke="${wires[idx(w)].color}" stroke-width="5" fill="none" vector-effect="non-scaling-stroke"/>`;
+        return `<path d="M0 ${y1} C45 ${y1} 55 ${y2} 100 ${y2}" stroke="${wires[idx(w)].color}" stroke-width="5" fill="none" vector-effect="non-scaling-stroke"/>`;
       }).join('');
     };
     body.querySelectorAll('.wire').forEach((b) => { b.onclick = () => { picked = b.dataset.w; render(); }; });
