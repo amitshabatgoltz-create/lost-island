@@ -11,6 +11,7 @@ import {
 import { canvasTex } from '../../items.js';
 import { createFacilityInteractions } from './interactions.js';
 import { MINIMAP } from './minimap.js';
+import { T } from '../../i18n/index.js';
 
 const yieldFrame = () => new Promise((r) => setTimeout(r, 0));
 const inRoom = (id, x, z, m = 0) => { const [a, b, c, d] = ROOMS[id].r; return x > a - m && x < b + m && z > c - m && z < d + m; };
@@ -23,7 +24,7 @@ export async function build(env, api, onProgress = () => {}) {
   const ctx = { group, colliders, occluders };
   const M = facilityMaterials();
 
-  onProgress(0.15, 'Concrete and steel');
+  onProgress(0.15, T('Concrete and steel'));
   // floor and ceiling over the whole plan (the walls close every room)
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(36, 38), M.floor);
   floor.rotation.x = -Math.PI / 2;
@@ -70,7 +71,7 @@ export async function build(env, api, onProgress = () => {}) {
   await yieldFrame();
 
   // ---------------------------------------------------------------- doors
-  onProgress(0.35, 'Doors');
+  onProgress(0.35, T('Doors'));
   const doors = {
     observation: buildDoor(ctx, M, DOORS.observation, { stencilLines: [['OBSERVATION', 40], ['LEVEL 2', 30]] }),
     archive: buildDoor(ctx, M, DOORS.archive, { stencilLines: [['RECORDS', 40], ['LEVEL 2', 30]] }),
@@ -85,7 +86,7 @@ export async function build(env, api, onProgress = () => {}) {
   box(group, 3.2, 0.3, 0.4, M.rust, 0, 2.75, 16);
 
   // ---------------------------------------------------------------- lights
-  onProgress(0.45, 'Lights');
+  onProgress(0.45, T('Lights'));
   const bulbs = [];
   bulbs.push(buildCeilingLamp(ctx, M, 0, 11, { rot: Math.PI / 2 }), buildCeilingLamp(ctx, M, 0, 4, { rot: Math.PI / 2 }));
   bulbs.push(buildCeilingLamp(ctx, M, 0, -3));
@@ -150,7 +151,7 @@ export async function build(env, api, onProgress = () => {}) {
   void sym;
 
   // ---------------------------------------------------------------- checkpoint
-  onProgress(0.55, 'Security checkpoint');
+  onProgress(0.55, T('Security checkpoint'));
   buildDesk(ctx, M, FX.desk.x, FX.desk.z, 0, { w: 1.8 });
   buildChair(ctx, M, FX.desk.x + 0.3, FX.desk.z - 1.0, 0.4, true);
   const secCRT = buildCRT(group, M, { w: 0.46, h: 0.36, depth: 0.38 });
@@ -166,7 +167,7 @@ export async function build(env, api, onProgress = () => {}) {
   await yieldFrame();
 
   // ---------------------------------------------------------------- observation room
-  onProgress(0.68, 'The observation room');
+  onProgress(0.68, T('The observation room'));
   buildDesk(ctx, M, 0, -19.05, 0, { w: 8, d: 0.9 });
   const rack = box(group, 6.4, 1.2, 0.3, M.grey, 0, 2.2, -19.75);
   void rack;
@@ -241,7 +242,7 @@ export async function build(env, api, onProgress = () => {}) {
   await yieldFrame();
 
   // ---------------------------------------------------------------- archive
-  onProgress(0.8, 'The archive');
+  onProgress(0.8, T('The archive'));
   buildFilingCabinets(ctx, M, 11, -4.62, 0, 8, { openIndex: 6 });
   buildFilingCabinets(ctx, M, 15.62, 2.4, -Math.PI / 2, 3);
   buildFilingCabinets(ctx, M, 6.32, 2.6, Math.PI / 2, 2);
@@ -258,7 +259,7 @@ export async function build(env, api, onProgress = () => {}) {
   await yieldFrame();
 
   // ---------------------------------------------------------------- restricted control room
-  onProgress(0.9, 'The control room');
+  onProgress(0.9, T('The control room'));
   // power distribution cabinet
   const pdTex = canvasTex(256, 320, (c) => {
     c.fillStyle = '#4f5e52'; c.fillRect(0, 0, 256, 320);
@@ -324,7 +325,7 @@ export async function build(env, api, onProgress = () => {}) {
       test: (x, z) => z > 15.6 && Math.abs(x) < 1.1,
     }],
     trailhead: { x: 0, z: 15 },
-    boundaryText: () => 'Concrete. The only way out is the corridor, back up to the door.',
+    boundaryText: () => T('Concrete. The only way out is the corridor, back up to the door.'),
     roomAt: (x, z) => Object.keys(ROOMS).find((id) => inRoom(id, x, z)) || null,
     ambience() { return { sea: 0, forest: 0, stream: 0, indoor: 1, hum: power === 'normal' ? 1 : 0 }; },
     setPower(mode) {

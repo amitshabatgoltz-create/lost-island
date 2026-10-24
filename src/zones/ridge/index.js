@@ -15,6 +15,7 @@ import {
 import { createRidgeInteractions } from './interactions.js';
 import { MINIMAP } from './minimap.js';
 import { RESOURCE_NODES } from '../../data/resources.js';
+import { T } from '../../i18n/index.js';
 
 const yieldFrame = () => new Promise((r) => setTimeout(r, 0));
 const LOGS = [[12, 40, 6, 0.6, 0.42], [-16, 10, 7, 1.9, 0.45], [16, -18, 6, 2.6, 0.4]];
@@ -30,12 +31,12 @@ export async function build(env, api, onProgress = () => {}) {
   const heightAt = (x, z) => (z < -45.9 && Math.abs(x) < 1.35 ? DOOR_FLOOR : terrainHeight(x, z));
   const ctx = { group, colliders, occluders, heightAt: terrainHeight };
 
-  onProgress(0.1, 'The northern ridge');
+  onProgress(0.1, T('The northern ridge'));
   const terrain = buildTerrainMesh();
   group.add(terrain);
   await yieldFrame();
 
-  onProgress(0.3, 'The door in the cliff');
+  onProgress(0.3, T('The door in the cliff'));
   const bunker = buildBunker(ctx, RL.bunker, DOOR_FLOOR);
   const panel = buildAccessPanel(ctx, RL.panel, terrainHeight(RL.panel.x, RL.panel.z));
   const junction = buildJunction(ctx, RL.junction, terrainHeight(RL.junction.x, RL.junction.z));
@@ -65,13 +66,13 @@ export async function build(env, api, onProgress = () => {}) {
   group.add(campLight);
   await yieldFrame();
 
-  onProgress(0.55, 'Rocks and trees');
+  onProgress(0.55, T('Rocks and trees'));
   const { trunkMat, palmTrunkMat, canopyMat, smallMat, palmLeafMat } = vegetationMaterials(shared);
   buildGiantTrees(ctx, [[-20, 50, 1.8], [18, 22, 2.0], [-22, -4, 1.9], [20, -24, 1.7]], canopyMat, trunkMat, jungleTreeGeometries);
   buildLogs(ctx, LOGS);
   buildRocks(ctx, rnd);
   await yieldFrame();
-  onProgress(0.75, 'Plants');
+  onProgress(0.75, T('Plants'));
   const smallChunks = buildVegetation(ctx, rnd, { trunkMat, palmTrunkMat, canopyMat, smallMat, palmLeafMat });
   bakeContactShade(terrain, shadeSpotsFromColliders(colliders));
   await yieldFrame();
@@ -107,10 +108,10 @@ export async function build(env, api, onProgress = () => {}) {
     trailhead: { x: 0, z: 65 },
     boundaryText(type) {
       return {
-        forest: 'The cliff. The only way in is the door.',
-        sea: 'The trail back to the forest is to the south.',
-        side: 'The valley walls are too steep to climb.',
-        cliff: 'Too steep. The valley only goes one way: up, toward the cliff.',
+        forest: T('The cliff. The only way in is the door.'),
+        sea: T('The trail back to the forest is to the south.'),
+        side: T('The valley walls are too steep to climb.'),
+        cliff: T('Too steep. The valley only goes one way: up, toward the cliff.'),
       }[type];
     },
     ambience() { return { sea: 0, forest: 0.7, stream: 0 }; },
