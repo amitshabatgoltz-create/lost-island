@@ -1012,6 +1012,14 @@ window.addEventListener('keydown', (e) => {
       if (game.mode === 'play') openJournal();
       else if (game.mode === 'journal') closeJournal();
       break;
+    case 'KeyQ':
+      // Q: look through the survivor's eyes, or from behind again (remembered with the other settings)
+      if (game.mode === 'play') {
+        settings.firstPerson = !settings.firstPerson;
+        saveSettings(settings);
+        ui.toast(settings.firstPerson ? 'View: through the eyes · Q to switch back' : 'View: from behind · Q to switch', '', 2);
+      }
+      break;
     case 'KeyF':
       if (game.mode === 'play') {
         if (!has('flashlight')) { ui.toast('I haven\'t found a flashlight yet. Maybe in the wreckage.', 'warn'); break; }
@@ -1084,6 +1092,9 @@ function step(dt) {
   const zone = game.zone;
   if (!zone || game.mode === 'transition') return;
   const m = game.mode;
+  // first person only while the game's own camera follows the survivor; lobby, wake-up, cut-scenes and the
+  // binoculars keep the body in view
+  player.setFirstPerson(!!settings.firstPerson && !['title', 'wake', 'cine', 'scope'].includes(m));
   if (m === 'title') {
     if (!lobby.active) return;
     lobby.update(dt);

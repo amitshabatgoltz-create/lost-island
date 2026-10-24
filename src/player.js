@@ -10,6 +10,7 @@ import { loadTorch } from './gfx/torch.js';
 const tmpV = new THREE.Vector3();
 const tmpAim = new THREE.Vector3();
 const tmpQ = new THREE.Quaternion(), tmpQ2 = new THREE.Quaternion();
+const tmpEye = new THREE.Vector3(), tmpLook = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
 
 // a clip's mirror image (left <-> right), for the left turn made from Turning Right 90
@@ -90,6 +91,8 @@ const TORCH_PITCH = [-1.3, 1.0]; // how far the beam can be aimed down / up (rad
 const TORCH_REACH = 1.75; // the beam swings at most this far (radians) from the way the body faces
 const ease = (k) => k * k * (3 - 2 * k);
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
+// first-person view (Q): how far the eyes may look up and down (radians; the third-person camera keeps 0.35 up, 1.15 down)
+const FP_PITCH = [-1.35, 1.35];
 const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 
 let gltfLoader;
@@ -118,6 +121,9 @@ export class Player {
     this.camPitch = 0.32;
     this.camDist = 4.6;
     this.curDist = 4.6;
+    this.firstPerson = false; // Q: the camera sits in the survivor's eyes (main.js decides when)
+    this.eye = null; // the camera position in first person
+    this.eyeOff = null; // the smoothed eye offset from the feet
     this.radius = 0.38;
     this.speed = 0;
     this.lying = 0; // 1 = lying on the sand, 0 = standing (drives the Stand_Up clip during the wake-up)
@@ -339,7 +345,18 @@ export class Player {
   // the survivor holds the flashlight in both hands while it is out (main.js: out = switched on with F)
   holdFlashlight(v) {
     this.holdTorch = v;
-    this.torch.visible = v && this.torch.children.length > 0;
+    this.torch.visible = v && this.torch.children.length > 0 && !this.firstPerson;
+  }
+
+  // first person: the camera moves into the eyes and the body (and the flashlight model) is hidden so it does not
+  // block the view; the beam then leaves from just below the eyes (updateFlashlight)
+  setFirstPerson(on) {
+    if (this.firstPerson === on) return;
+    this.firstPerson = on;
+    this.model.root.visible = !on;
+    this.torch.visible = !on && this.holdTorch && this.torch.children.length > 0;
+    this.eyeOff = null;
+    if (!on) this.camPitch = Math.max(-0.35, Math.min(1.15, this.camPitch));
   }
 
   // flashlight shadows follow the game's shadow setting (one extra 512² pass while the light is on)
@@ -348,8 +365,10 @@ export class Player {
   // the beam goes where the camera looks: mouse left/right turns it, mouse up/down raises and lowers it
   updateFlashlight(dt) {
     if (!this.flashlightOn && !this.holdTorch) { this.followCam = false; return; }
+    const fp = this.firstPerson && this.followCam;
     const want = tmpAim;
-    if (this.followCam) {
+    if (fp) this.camera.getWorldDirection(want); // first person: exactly where the eyes look
+    else if (this.followCam) {
       // the default camera pitch (0.32) aims a little down, at the ground ~10 m ahead
       const e = Math.max(TORCH_PITCH[0], Math.min(TORCH_PITCH[1], (0.32 - this.camPitch) * 1.5 - 0.12));
       let yaw = this.camYaw + Math.PI;
@@ -360,23 +379,31 @@ export class Player {
       want.set(Math.sin(this.facing), -0.12, Math.cos(this.facing)).normalize();
     }
     this.followCam = false;
-    this.aimDir.lerp(want, Math.min(1, dt * 14)).normalize();
-    // the flashlight sits in the right hand's grip and points along the aim while the hands hold it up; when the
-    // hands are busy (picking up, climbing, sitting) it simply stays in the hand
-    this.model.root.updateMatrixWorld(true);
-    const t = this.torch;
-    if (this.hand) this.hand.localToWorld(t.position.set(0, 8.5 * this.handK, 2.5 * this.handK));
-    else t.position.copy(this.pos).add(tmpV.set(0, 1.1, 0));
-    t.lookAt(tmpV.copy(t.position).add(this.aimDir));
-    if (this.hand) {
-      const hq = this.hand.getWorldQuaternion(tmpQ);
-      if (this.holdW > 0.95 || !this.torchRel) this.torchRel = (this.torchRel || new THREE.Quaternion()).copy(hq).invert().multiply(t.quaternion);
-      else t.quaternion.slerp(tmpQ2.copy(hq).multiply(this.torchRel), 1 - this.holdW);
+    this.aimDir.lerp(want, Math.min(1, dt * (fp ? 30 : 14))).normalize();
+    let dir;
+    if (fp) {
+      // first person: the light is held just below and to the right of the eyes and points along the view
+      const c = this.camera.position;
+      dir = this.aimDir;
+      this.flashlight.position.set(c.x + Math.cos(this.camYaw) * 0.16, c.y - 0.2, c.z - Math.sin(this.camYaw) * 0.16);
+    } else {
+      // the flashlight sits in the right hand's grip and points along the aim while the hands hold it up; when the
+      // hands are busy (picking up, climbing, sitting) it simply stays in the hand
+      this.model.root.updateMatrixWorld(true);
+      const t = this.torch;
+      if (this.hand) this.hand.localToWorld(t.position.set(0, 8.5 * this.handK, 2.5 * this.handK));
+      else t.position.copy(this.pos).add(tmpV.set(0, 1.1, 0));
+      t.lookAt(tmpV.copy(t.position).add(this.aimDir));
+      if (this.hand) {
+        const hq = this.hand.getWorldQuaternion(tmpQ);
+        if (this.holdW > 0.95 || !this.torchRel) this.torchRel = (this.torchRel || new THREE.Quaternion()).copy(hq).invert().multiply(t.quaternion);
+        else t.quaternion.slerp(tmpQ2.copy(hq).multiply(this.torchRel), 1 - this.holdW);
+      }
+      t.updateMatrixWorld();
+      dir = tmpAim.set(0, 0, 1).applyQuaternion(t.quaternion);
+      // the light leaves from the lens, just clear of the hand so the arm does not shadow it
+      this.flashlight.position.copy(t.position).addScaledVector(dir, 0.14);
     }
-    t.updateMatrixWorld();
-    const dir = tmpAim.set(0, 0, 1).applyQuaternion(t.quaternion);
-    // the light leaves from the lens, just clear of the hand so the arm does not shadow it
-    this.flashlight.position.copy(t.position).addScaledVector(dir, 0.14);
     this.flashlight.target.position.copy(this.flashlight.position).add(dir);
     this.flashlight.target.updateMatrixWorld();
     // where the lower edge of the bright core meets the ground: a close hit dims the beam (an eye adapting to the spot)
@@ -512,7 +539,7 @@ export class Player {
     const s = 0.0024 * this.settings.sens;
     this.camYaw -= dx * s;
     this.camPitch += (this.settings.invertY ? -dy : dy) * s;
-    this.camPitch = Math.max(-0.35, Math.min(1.15, this.camPitch));
+    this.camPitch = this.firstPerson ? Math.max(FP_PITCH[0], Math.min(FP_PITCH[1], this.camPitch)) : Math.max(-0.35, Math.min(1.15, this.camPitch));
   }
 
   forward() { return new THREE.Vector3(-Math.sin(this.camYaw), 0, -Math.cos(this.camYaw)); }
@@ -608,9 +635,12 @@ export class Player {
     this.breathT = Math.max(0, this.breathT - dt);
     this.breathK += ((this.breathT > 0 ? 1 : 0) - this.breathK) * Math.min(1, dt * 2);
 
+    // first person, standing: the body turns with the view so the eyes stay over the shoulders
+    if (this.firstPerson && controlEnabled && !this.busy && !holdFacing && !(mx || mz)) {
+      this.facing += wrap(this.camYaw + Math.PI - this.facing) * Math.min(1, dt * 10);
     // standing with the flashlight: the survivor turns to face where it is aimed (a quarter turn on the spot, or a
     // smooth turn when no turning clip fits)
-    if ((this.flashlightOn || this.holdTorch) && this.followCam && controlEnabled && !this.busy && !holdFacing && !(mx || mz) && this.speed < 0.3) {
+    } else if ((this.flashlightOn || this.holdTorch) && this.followCam && controlEnabled && !this.busy && !holdFacing && !(mx || mz) && this.speed < 0.3) {
       const d = wrap(this.camYaw + Math.PI - this.facing);
       const turn = d < 0 ? 'Turn_Right_90' : 'Turn_Left_90';
       if (Math.abs(d) > 1.2 && this.holdTorch && !this.act && this.actions[turn]) {
@@ -797,6 +827,7 @@ export class Player {
   }
 
   updateCamera(dt) {
+    if (this.firstPerson) { this.updateEyeCamera(dt); return; }
     const target = tmpV.set(this.pos.x, this.pos.y + 1.55, this.pos.z);
     const cp = Math.cos(this.camPitch), sp = Math.sin(this.camPitch);
     const dir = new THREE.Vector3(Math.sin(this.camYaw) * cp, sp, Math.cos(this.camYaw) * cp);
@@ -824,6 +855,28 @@ export class Player {
     if (this.ceiling && camPos.y > this.ceiling - 0.5) camPos.y = this.ceiling - 0.5;
     this.camera.position.copy(camPos);
     this.camera.lookAt(origin.x, origin.y - 0.1, origin.z);
+    this.followCam = true;
+  }
+
+  // first person (Q): the camera sits in the eyes, following the head through walks, climbs and jumps
+  updateEyeCamera(dt) {
+    const cp = Math.cos(this.camPitch);
+    const look = tmpLook.set(-Math.sin(this.camYaw) * cp, -Math.sin(this.camPitch), -Math.cos(this.camYaw) * cp);
+    // the head bone sits at the base of the skull: lift it to the eyes and nudge it forward, clear of the face
+    const want = this.headPosition(tmpEye);
+    want.x -= Math.sin(this.camYaw) * 0.1;
+    want.z -= Math.cos(this.camYaw) * 0.1;
+    want.y += 0.1;
+    // a little smoothing of the head's sway (not of the walk itself) so steps do not shake the view
+    want.sub(this.pos);
+    if (!this.eyeOff || dt >= 1) this.eyeOff = want.clone();
+    else this.eyeOff.lerp(want, Math.min(1, dt * 12));
+    this.eye = (this.eye || new THREE.Vector3()).copy(this.pos).add(this.eyeOff);
+    const gh = this.heightAt(this.eye.x, this.eye.z) + 0.25;
+    if (this.eye.y < gh) this.eye.y = gh;
+    if (this.ceiling && this.eye.y > this.ceiling - 0.2) this.eye.y = this.ceiling - 0.2;
+    this.camera.position.copy(this.eye);
+    this.camera.lookAt(this.eye.x + look.x, this.eye.y + look.y, this.eye.z + look.z);
     this.followCam = true;
   }
 }
