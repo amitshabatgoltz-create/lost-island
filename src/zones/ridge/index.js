@@ -13,6 +13,7 @@ import {
   buildMast, buildLamps, buildCable,
 } from './props.js';
 import { createRidgeInteractions } from './interactions.js';
+import { MINIMAP } from './minimap.js';
 import { RESOURCE_NODES } from '../../data/resources.js';
 
 const yieldFrame = () => new Promise((r) => setTimeout(r, 0));
@@ -84,6 +85,7 @@ export async function build(env, api, onProgress = () => {}) {
     group, colliders, occluders, heightAt,
     isPlatform: (x, z) => z < -45.9 && Math.abs(x) < 1.35,
     bounds: RBOUNDS,
+    minimap: MINIMAP,
     deepWater: null,
     cameraFar: 220,
     parts,

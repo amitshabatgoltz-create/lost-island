@@ -10,6 +10,7 @@ import {
 } from './props.js';
 import { canvasTex } from '../../items.js';
 import { createFacilityInteractions } from './interactions.js';
+import { MINIMAP } from './minimap.js';
 
 const yieldFrame = () => new Promise((r) => setTimeout(r, 0));
 const inRoom = (id, x, z, m = 0) => { const [a, b, c, d] = ROOMS[id].r; return x > a - m && x < b + m && z > c - m && z < d + m; };
@@ -308,6 +309,7 @@ export async function build(env, api, onProgress = () => {}) {
     ceiling: H,
     isPlatform: () => false,
     bounds: FBOUNDS,
+    minimap: MINIMAP,
     deepWater: null,
     cameraFar: 60,
     parts,
