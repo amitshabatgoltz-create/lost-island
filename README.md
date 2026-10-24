@@ -24,6 +24,16 @@ npm run preview    # מריץ את dist/ על http://localhost:4173
 - **גרירה:** `npm run build` ואז לגרור את התיקייה `dist` אל https://app.netlify.com/drop
 - **מ-Git:** לחבר את הריפו ב-Netlify. `netlify.toml` כבר מגדיר `npm run build` ו-`dist`.
 
+## פרסום ב-itch.io
+
+itch.io הוא אתר משחקים מוכר ובטוח. שם משחקים ישר בדפדפן, בלי להוריד שום קובץ.
+
+- הקובץ להעלאה: `LOST-web.zip` בדף https://github.com/amitshabatgoltz-create/lost-island/releases/tag/itch-latest
+- הוא נבנה אוטומטית ב-GitHub Actions (`.github/workflows/itch.yml`) בכל עדכון של `main`.
+- בניה ידנית: `npm run build`, ואז לכווץ את **מה שבתוך** `dist` (לא את התיקייה עצמה), כך ש-`index.html` יהיה בראש ה-zip.
+- בדף המשחק ב-itch.io: Kind of project = HTML, לסמן "This file will be played in the browser", גודל 1280x720, ולסמן "Fullscreen button".
+- אחרי עדכון של המשחק צריך להעלות שוב את ה-zip החדש (ולמחוק את הישן).
+
 ## גרסה למחשב (Windows)
 
 אפשר להוריד את המשחק ולהתקין אותו כמו כל משחק רגיל:
