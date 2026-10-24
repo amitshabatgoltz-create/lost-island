@@ -1,0 +1,38 @@
+{
+  "name": "lost-island-desktop",
+  "productName": "LOST",
+  "version": "0.1.0",
+  "description": "LOST: The Missing Island, desktop (Windows) version.",
+  "author": "amitshabatgoltz-create",
+  "private": true,
+  "main": "main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win --publish never"
+  },
+  "devDependencies": {
+    "electron": "44.5.1",
+    "electron-builder": "26.17.0"
+  },
+  "build": {
+    "appId": "com.amitshabatgoltz.lostisland",
+    "productName": "LOST",
+    "files": ["main.cjs", "app/**/*"],
+    "directories": { "output": "release" },
+    "icon": "icon.png",
+    "win": {
+      "target": ["nsis", "portable"]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "LOST",
+      "artifactName": "LOST-Setup.${ext}"
+    },
+    "portable": {
+      "artifactName": "LOST-Portable.${ext}"
+    }
+  }
+}
