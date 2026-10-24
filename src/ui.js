@@ -192,11 +192,36 @@ export class UI {
     return close;
   }
 
-  openWorkbench({ materials, recipes, onClose }) {
+  openWorkbench({ materials, recipes, craft, onClose }) {
     const el = $('workbench');
     const ids = ['wood', 'rope', 'cloth', 'battery', 'electronics'];
-    $('bench-materials').innerHTML = ids.map((id) => `<div class="mat"><span class="slot-ico">${ICONS[id]}</span><span>${ITEMS[id].name}</span><b>${materials[id] || 0}</b></div>`).join('');
-    $('bench-recipes').textContent = recipes.length ? '' : 'עוד אין לי שרטוטים לבנות מהם. אולי אמצא כאלה במחנה המחקר — או במקומות אחרים באי.';
+    const msg = $('bench-msg');
+    const say = (text, kind = '') => { msg.textContent = text || ''; msg.className = 'storage-msg ' + kind; };
+    const render = () => {
+      const mats = materials();
+      $('bench-materials').innerHTML = ids.map((id) => `<div class="mat"><span class="slot-ico">${ICONS[id]}</span><span>${ITEMS[id].name}</span><b>${mats[id] || 0}</b></div>`).join('');
+      const list = recipes();
+      $('bench-recipes').textContent = list.length ? '' : 'עוד אין לי שרטוטים לבנות מהם. אולי אמצא כאלה במחנה המחקר ביער — בבקתה, באוהל או ליד ארגזי הציוד.';
+      const box = $('bench-list');
+      box.innerHTML = '';
+      for (const r of list) {
+        const enough = Object.entries(r.needs).every(([m, q]) => (mats[m] || 0) >= q);
+        const row = document.createElement('div');
+        row.className = 'recipe' + (r.built ? ' built' : '');
+        const needs = Object.entries(r.needs).map(([m, q]) => `<span class="${(mats[m] || 0) >= q ? 'ok' : 'miss'}">${ITEMS[m].name} ×${q}</span>`).join(' · ');
+        row.innerHTML = `<div class="recipe-txt"><b>${r.name}</b><span class="recipe-desc">${r.desc}</span><span class="recipe-needs">${needs}</span></div>`;
+        const btn = document.createElement('button');
+        btn.className = 'btn small';
+        btn.textContent = r.built ? 'נבנה ✓' : 'בנה';
+        btn.disabled = r.built || !enough;
+        btn.onclick = () => { const res = craft(r.id); say(res.msg, res.ok ? 'ok' : 'warn'); render(); };
+        row.appendChild(btn);
+        box.appendChild(row);
+      }
+    };
+    say('');
+    render();
+    this.benchCraft = (id) => { const res = craft(id); render(); return res; }; // used by automated tests
     const close = () => { el.classList.add('hidden'); window.removeEventListener('keydown', onKey, true); onClose && onClose(); };
     const onKey = (e) => { if (e.code === 'Escape' || e.code === 'KeyE') { close(); e.stopPropagation(); e.preventDefault(); } };
     $('bench-close').onclick = close;

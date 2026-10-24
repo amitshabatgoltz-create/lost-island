@@ -1,6 +1,12 @@
 // Progress persistence in localStorage (fails gracefully when storage is blocked).
 import { BAG_SLOTS, CONTAINERS, createContainer } from './systems/inventory.js';
 import { isStorable } from './data/items.js';
+import { BAG_BONUS, CHEST_BONUS } from './data/recipes.js';
+
+// container sizes grow with base upgrades built at the workbench
+const bonus = (table, unlocked) => (unlocked || []).reduce((n, u) => n + (table[u] || 0), 0);
+export const bagSlots = (s) => BAG_SLOTS + bonus(BAG_BONUS, s.base && s.base.unlocked);
+export const containerSlots = (s, id) => CONTAINERS[id].slots + (id === 'baseChest' ? bonus(CHEST_BONUS, s.base && s.base.unlocked) : 0);
 
 const KEY = 'lost-missing-island:save:v1';
 const SETTINGS_KEY = 'lost-missing-island:settings:v1';
@@ -31,17 +37,17 @@ function migrate(s) {
     s.inv = createContainer(BAG_SLOTS);
     for (const id of ['water', 'bandage']) if (s.collected.includes(id)) s.inv.items[id] = 1;
   }
-  s.inv.slots = BAG_SLOTS;
+  s.base = { ...base.base, ...(s.base || {}) };
+  s.inv.slots = bagSlots(s);
   s.containers = { ...base.containers, ...(s.containers || {}) };
   for (const [id, c] of Object.entries(CONTAINERS)) {
     if (!s.containers[id] || !s.containers[id].items) s.containers[id] = createContainer(c.slots);
-    s.containers[id].slots = c.slots;
+    s.containers[id].slots = containerSlots(s, id);
   }
   // never trust stored numbers blindly: drop anything that is not a whole positive quantity
   for (const c of [s.inv, ...Object.values(s.containers)]) {
     for (const [id, q] of Object.entries(c.items)) if (!isStorable(id) || !Number.isInteger(q) || q <= 0) delete c.items[id];
   }
-  s.base = { ...base.base, ...(s.base || {}) };
   s.schema = 2;
   return s;
 }

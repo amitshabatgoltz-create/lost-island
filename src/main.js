@@ -12,8 +12,8 @@ import { ITEMS } from './data/items.js';
 import { QUESTS, questById } from './data/quests.js';
 import { FINAL_ENTRY, CLUES } from './data/clues.js';
 import { QUEST_INFO, mainGoal, CLUE_LEARNED } from './data/story.js';
-import { freshState, loadState, saveState, clearState, loadSettings, saveSettings, storageAvailable } from './save.js';
-import { CONTAINERS, add as invAdd, count as invCount, spaceFor, transfer, totals } from './systems/inventory.js';
+import { freshState, loadState, saveState, clearState, loadSettings, saveSettings, storageAvailable, bagSlots, containerSlots } from './save.js';
+import { CONTAINERS, add as invAdd, remove as invRemove, count as invCount, spaceFor, transfer, totals } from './systems/inventory.js';
 import { isStorable } from './data/items.js';
 import { RECIPES } from './data/recipes.js';
 import { createPost } from './gfx/post.js';
@@ -429,9 +429,36 @@ function openWorkbench() {
   setMode('storage');
   releasePointer();
   ui.setPrompt(null);
+  const chest = s.containers.baseChest;
   ui.openWorkbench({
-    materials: totals(s.inv, s.containers.baseChest),
-    recipes: RECIPES,
+    materials: () => totals(s.inv, chest),
+    recipes: () => RECIPES.filter((r) => has(r.blueprint)).map((r) => ({ ...r, built: !!r.gives.upgrade && s.base.unlocked.includes(r.gives.upgrade) })),
+    craft(id) {
+      const r = RECIPES.find((x) => x.id === id);
+      if (!r || !has(r.blueprint)) return { ok: false };
+      if (r.gives.upgrade && s.base.unlocked.includes(r.gives.upgrade)) return { ok: false, msg: 'כבר בניתי את זה.' };
+      const have = totals(s.inv, chest);
+      const missing = Object.entries(r.needs).filter(([m, q]) => (have[m] || 0) < q);
+      if (missing.length) { audio.deny(); return { ok: false, msg: 'חסר לי: ' + missing.map(([m, q]) => `${ITEMS[m].name} ×${q - (have[m] || 0)}`).join(', ') }; }
+      if (r.gives.item && spaceFor(s.inv, r.gives.item) < r.gives.qty) { audio.deny(); return { ok: false, msg: 'אין מקום בתיק. אפשר לפנות מקום בתיבה.' }; }
+      // take from the bag first, then from the chest
+      for (const [m, q] of Object.entries(r.needs)) {
+        const fromBag = Math.min(q, invCount(s.inv, m));
+        if (fromBag) invRemove(s.inv, m, fromBag);
+        if (q - fromBag) invRemove(chest, m, q - fromBag);
+      }
+      if (r.gives.item) invAdd(s.inv, r.gives.item, r.gives.qty);
+      if (r.gives.upgrade) {
+        s.base.unlocked.push(r.gives.upgrade);
+        s.inv.slots = bagSlots(s);
+        chest.slots = containerSlots(s, 'baseChest');
+      }
+      audio.pickup();
+      player.playPickup();
+      refreshHUD(r.gives.item);
+      persist();
+      return { ok: true, msg: `בניתי: ${r.name}` };
+    },
     onClose() { if (game.mode === 'storage') setMode('play'); updateLockHint(); },
   });
 }

@@ -419,6 +419,16 @@ button { font-family: inherit; }
 .mat { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 4px; background: rgba(0, 0, 0, 0.25); font-size: 14px; }
 .mat b { margin-right: auto; font-variant-numeric: tabular-nums; color: #ffd98a; }
 .bench-note { font-size: 14px; color: #d9c7a3; line-height: 1.6; }
+.bench-note:empty { display: none; }
+.recipes { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.recipe { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 4px; background: rgba(0, 0, 0, 0.25); }
+.recipe.built { opacity: 0.7; }
+.recipe .btn.small { align-self: center; flex-shrink: 0; }
+.recipe-txt { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; font-size: 14px; }
+.recipe-desc { font-size: 12px; color: #d9c7a3; }
+.recipe-needs { font-size: 12px; font-variant-numeric: tabular-nums; }
+.recipe-needs .ok { color: #b9e4bf; }
+.recipe-needs .miss { color: #ffc49a; }
 @media (max-width: 760px) {
   .crate-cols { grid-template-columns: 1fr; }
   .slots { grid-template-columns: repeat(auto-fill, minmax(68px, 1fr)); }

@@ -3,6 +3,7 @@
 //   kind 'gear'     — carried items with a quantity; can be stored (stack = max per slot)
 //   kind 'resource' — materials for future crafting; stackable and storable
 //   kind 'clue'     — booklet entries (not physical inventory)
+//   kind 'blueprint' — found once, unlocks a workbench recipe (not physical inventory)
 export const ITEMS = {
   // ---- Part 1 (beach)
   water: { name: 'בקבוק מים', kind: 'gear', stack: 5, toast: 'נאסף: בקבוק מים', desc: 'בקבוק סגור, כמעט מלא. זה יחזיק אותי יום, אולי יומיים.' },
@@ -30,6 +31,10 @@ export const ITEMS = {
   schedule: { name: 'לוח משמרות תצפית', kind: 'clue', toast: 'רמז חדש: לוח משמרות תצפית' },
   routeChart: { name: 'תרשים נתיב הטיסה', kind: 'clue', toast: 'רמז חדש: תרשים נתיב הטיסה' },
   stillHere: { name: 'רשומה אחרונה', kind: 'clue', toast: 'נוספה רשומה לחוברת' },
+  // ---- blueprints (research camp): unlock recipes at the workbench
+  bpBandage: { name: 'שרטוט: תחבושת', kind: 'blueprint', toast: 'נמצא שרטוט: תחבושת — אפשר לבנות בשולחן העבודה' },
+  bpBag: { name: 'שרטוט: תיק גדול', kind: 'blueprint', toast: 'נמצא שרטוט: תיק גדול — אפשר לבנות בשולחן העבודה' },
+  bpChest: { name: 'שרטוט: תיבה גדולה', kind: 'blueprint', toast: 'נמצא שרטוט: תיבה גדולה — אפשר לבנות בשולחן העבודה' },
 };
 
 export const KEY_ORDER = ['flashlight', 'booklet', 'powerCell'];

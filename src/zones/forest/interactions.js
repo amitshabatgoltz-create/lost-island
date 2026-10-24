@@ -175,10 +175,11 @@ export function createForestInteractions(zone, api) {
   add({
     id: 'tent', kind: 'examine', x: tentFront.x, z: tentFront.z, radius: 2.4,
     available: () => true,
-    label: () => 'בדוק את האוהל',
+    label: () => (has('bpBandage') ? 'בדוק את האוהל' : 'בדוק את האוהל (יש שם שרטוט)'),
     use: () => {
       api.audio.click();
-      api.thought('הבד קרוע מבפנים, לא מבחוץ. שק שינה, ומגף אחד. רק אחד.', 4.5);
+      const found = !has('bpBandage') && api.collect('bpBandage');
+      api.thought('הבד קרוע מבפנים, לא מבחוץ. שק שינה, ומגף אחד. רק אחד.' + (found ? ' ובכיס של השק — שרטוט של תחבושת מבד.' : ''), 4.5);
       if (!flags().tentSeen) { api.setFlag('tentSeen'); api.checkQuests(); }
     },
   });
@@ -204,7 +205,18 @@ export function createForestInteractions(zone, api) {
       if (!has('calendar')) api.collect('calendar', { silent: true });
     },
   });
-  examine('cabinDesk', P.cabin.spots.desk, 'בדוק את השולחן בבקתה', 'כוס קפה עם עובש ודפים עם מספרים. מי שגר כאן עזב בחיפזון — הכיסא עוד הפוך.', 1.4);
+  // blueprints for the workbench at the base camp
+  const blueprintSpot = (id, pos, label, text, radius, bp, bpText) => add({
+    id, kind: 'examine', x: pos.x, z: pos.z, radius,
+    available: () => true,
+    label: () => (has(bp) ? label : `${label} (יש שם שרטוט)`),
+    use: () => {
+      api.audio.click();
+      if (!has(bp)) { api.collect(bp); api.thought(bpText, 4.5, 0.4); } else api.thought(text, 4.2);
+    },
+  });
+  blueprintSpot('cabinDesk', P.cabin.spots.desk, 'בדוק את השולחן בבקתה', 'כוס קפה עם עובש ודפים עם מספרים. מי שגר כאן עזב בחיפזון — הכיסא עוד הפוך.', 1.4,
+    'bpBag', 'מתחת לכוס הקפה — שרטוט של תיק גב מבד וחבל. אפשר לבנות אותו בשולחן העבודה במחנה.');
   examine('cabinShelf', P.cabin.spots.shelf, 'בדוק את המדף', 'צנצנות עם דגימות אדמה ומים, מתויגות בתאריכים. האחרונה: 22 בספטמבר. יום לפני הטיסה.', 1.4);
   const tableFront = front(FL.table, 1.15);
   add({
@@ -220,7 +232,8 @@ export function createForestInteractions(zone, api) {
     },
   });
   examine('campRadio', { x: P.table.radioPos.x, z: P.table.radioPos.z }, 'בדוק את מכשיר הקשר', 'מכשיר קשר ידני, מכוון ל־417.9. הסוללה חמה. מישהו החזיק אותו לא מזמן.', 1.2);
-  examine('crates', FL.crates, 'בדוק את ארגזי הציוד', 'ארגזי ציוד עם אותו סמל ו־“NJ · FIELD 04”. ריקים. מישהו פינה אותם לפני שעזב.', 2.2);
+  blueprintSpot('crates', FL.crates, 'בדוק את ארגזי הציוד', 'ארגזי ציוד עם אותו סמל ו־“NJ · FIELD 04”. ריקים. מישהו פינה אותם לפני שעזב.', 2.2,
+    'bpChest', 'על הארגז מודבק שרטוט הרכבה של תיבה גדולה. אפשר לבנות אותה בשולחן העבודה במחנה.');
   examine('generator', FL.generator, 'בדוק את הגנרטור', 'גנרטור מפורק. החלקים לא נשברו — הם הוצאו בזהירות, אחד אחד.', 2.0);
   examine('dish', FL.dish, 'בדוק את צלחת הלוויין', 'הצלחת מכוונת דרומה. לא לשמיים — לים. לכיוון שממנו הגענו.', 2.0);
 
