@@ -36,13 +36,22 @@ jobs:
         run: rm -rf desktop/app && cp -r dist desktop/app
       - run: npm ci
         working-directory: desktop
+      # Every build gets a higher version number, so installed games
+      # notice there is something new and update themselves.
+      - run: npm pkg set version=1.0.${{ github.run_number }}
+        working-directory: desktop
       - run: npm run dist
         working-directory: desktop
+      - run: ls -l desktop/release
+        shell: bash
       - uses: actions/upload-artifact@v4
         if: github.event_name == 'pull_request'
         with:
           name: LOST-windows
-          path: desktop/release/*.exe
+          path: |
+            desktop/release/*.exe
+            desktop/release/*.blockmap
+            desktop/release/latest.yml
       - name: Publish release
         if: github.event_name != 'pull_request'
         shell: bash
@@ -52,8 +61,10 @@ jobs:
           gh release delete pc-latest --cleanup-tag --yes || true
           gh release create pc-latest \
             desktop/release/LOST-Setup.exe \
+            desktop/release/LOST-Setup.exe.blockmap \
+            desktop/release/latest.yml \
             desktop/release/LOST-Portable.exe \
             --target "$GITHUB_SHA" \
             --title "LOST for PC (Windows)" \
             --latest \
-            --notes "Download **LOST-Setup.exe** to install the game (adds a desktop icon), or **LOST-Portable.exe** to play without installing. Windows may show a blue 'Windows protected your PC' screen the first time: click 'More info' then 'Run anyway'."
+            --notes "Download **LOST-Setup.exe** to install the game (adds a desktop icon), or **LOST-Portable.exe** to play without installing. The installed version updates itself when a new version comes out. Windows may show a blue 'Windows protected your PC' screen the first time: click 'More info' then 'Run anyway'."

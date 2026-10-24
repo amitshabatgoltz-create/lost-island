@@ -32,6 +32,7 @@ https://github.com/amitshabatgoltz-create/lost-island/releases/latest
 - `LOST-Setup.exe` מתקין את המשחק ושם אייקון על שולחן העבודה.
 - `LOST-Portable.exe` מריץ את המשחק בלי התקנה.
 - בפעם הראשונה Windows עלול להציג מסך כחול "Windows protected your PC": ללחוץ "More info" ואז "Run anyway".
+- הגרסה המותקנת (Setup) מתעדכנת לבד: בכל פתיחה היא בודקת אם יש גרסה חדשה, מורידה אותה ברקע ושואלת אם להפעיל מחדש. הגרסה הניידת (Portable) לא מתעדכנת לבד.
 - המשחק נפתח במסך מלא. F11 או Alt+Enter עוברים בין מסך מלא לחלון.
 
 הקובץ נבנה אוטומטית ב-GitHub Actions (`.github/workflows/desktop.yml`) בכל עדכון של `main`. הקוד של האפליקציה נמצא ב-`desktop/` (Electron). להרצה מקומית: `npm run build`, להעתיק את `dist` אל `desktop/app`, ואז בתוך `desktop/` להריץ `npm install`, `npx install-electron` ו-`npm start`.
