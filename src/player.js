@@ -51,7 +51,7 @@ function legPhase(a, ta, b) {
 }
 const MODEL_URL = './models/survivor.glb';
 // extra clips (tools/anims/README.md); a clip here replaces survivor.glb's clip of the same name
-const ANIM_URLS = ['start_walking', 'torch_start_walking', 'stop_walking', 'idle_to_running', 'turn_right_90', 'jump', 'falling', 'fall_land'].map((n) => `./models/anims/${n}.glb`);
+const ANIM_URLS = ['start_walking', 'torch_start_walking', 'stop_walking', 'idle_to_running', 'turn_right_90', 'jump', 'running_jump', 'forward_jump', 'falling', 'fall_land'].map((n) => `./models/anims/${n}.glb`);
 const SCALE = 0.0104; // the model is authored in centimetres, 176 cm tall
 const WALK = 2.8, RUN = 5.8; // m/s
 // first steps from standing: Start_Walking (and its flashlight version) is a slower stroll than Walking, so it is sped
@@ -61,7 +61,14 @@ const START = {
   Torch_Start_Walking: { rate: 2.1, from: 0.3, to: 1.4 },
 };
 // clips whose forward travel moves the player (the hips travel is taken back out), by how they end
-const DRIVE = { Start_Walking: 'start', Torch_Start_Walking: 'start', Idle_To_Running: 'run', Stop_Walking: 'stop', Jump: 'jump', Fall_Land: 'land' };
+const DRIVE = { Start_Walking: 'start', Torch_Start_Walking: 'start', Idle_To_Running: 'run', Stop_Walking: 'stop', Jump: 'jump', Running_Jump: 'jump', Forward_Jump: 'jump', Fall_Land: 'land' };
+// Space: [clip, options] — with the flashlight out its two-handed Jump, otherwise a running leap on the move
+// (Jump 1) or a standing jump forward (Forward Jump)
+const JUMPS = {
+  torch: ['Jump', { timeScale: 1.2, from: 1.05, to: 2.45 }],
+  moving: ['Running_Jump', { timeScale: 1.25, from: 0.05 }],
+  standing: ['Forward_Jump', { timeScale: 1.3, from: 0.3 }],
+};
 // falling off a drop: the ground falling away faster than this (m per m of travel, and m per frame) starts a fall
 const FALL_SLOPE = 2, FALL_STEP = 0.2;
 const GRAVITY = 22; // m/s², a little above real for a snappier fall
@@ -491,11 +498,13 @@ export class Player {
     this.still = this.speed < 0.2;
   }
 
-  // Space: a leap forward (the Jump clip's run-up is skipped)
+  // Space: a leap forward
   jump() {
-    if (!this.mixer || !this.drives.Jump || this.busy || this.air || (this.act && this.act.name === 'Jump')) return;
+    if (!this.mixer || this.busy || this.air || (this.act && this.drives[this.act.name]?.kind === 'jump')) return;
+    const [name, opts] = JUMPS[this.holdTorch ? 'torch' : this.speed > 1 ? 'moving' : 'standing'];
+    if (!this.drives[name]) return;
     this.cancelAction();
-    this.play('Jump', { timeScale: 1.2, from: 1.05, to: 2.45, lock: true, fadeIn: 0.15, fadeOut: 0.3 });
+    this.play(name, { ...opts, lock: true, fadeIn: 0.12, fadeOut: 0.3 });
   }
 
   // rotate camera from mouse deltas
