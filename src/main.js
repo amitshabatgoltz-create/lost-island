@@ -21,6 +21,17 @@ import { GFX } from './gfx/materials.js';
 import { setAnisotropy } from './gfx/textures.js';
 import { Lobby } from './lobby.js';
 import { DEFAULT_SKIN } from './data/skins.js';
+import { poki } from './poki.js';
+// fonts are bundled with the game (no outside requests, works on game portals)
+import '@fontsource/heebo/300.css';
+import '@fontsource/heebo/400.css';
+import '@fontsource/heebo/500.css';
+import '@fontsource/heebo/700.css';
+import '@fontsource/heebo/800.css';
+import '@fontsource/amatic-sc/400.css';
+import '@fontsource/amatic-sc/700.css';
+import '@fontsource/caveat/500.css';
+import '@fontsource/caveat/700.css';
 
 // zones are separate chunks, loaded on demand and disposed when left
 const ZONES = {
@@ -103,7 +114,13 @@ function tip(id) {
   saveSettings(settings);
   ui.tip(TIPS[id]);
 }
-function setMode(m) { game.mode = m; game.modeTime = 0; }
+// modes where the player is not playing: Poki may only show ads then
+const IDLE_MODES = ['loading', 'title', 'paused', 'end'];
+function setMode(m) {
+  game.mode = m;
+  game.modeTime = 0;
+  poki.gameplay(!IDLE_MODES.includes(m));
+}
 
 // ------------------------------------------------------------------ API handed to zones
 const api = {
@@ -173,6 +190,7 @@ const api = {
 
 // ------------------------------------------------------------------ boot
 async function boot() {
+  await poki.init();
   try {
     env = createEnvironment(renderer);
     player = new Player(env.scene, camera);
@@ -200,6 +218,7 @@ async function boot() {
   await new Promise((r) => setTimeout(r, 0));
   intro.compile(renderer);
   ui.setLoading(1, 'מוכן');
+  poki.loadingFinished();
   setTimeout(() => { ui.show('loading', false); showTitle(); }, 250);
   requestAnimationFrame(loop);
 }
@@ -565,11 +584,11 @@ function leaveLobby(start) {
   audio.init();
   audio.click();
   ui.fade(1, 0.7);
-  setTimeout(() => {
+  setTimeout(() => poki.commercialBreak(audio).then(() => {
     lobby.leave();
     game.starting = false;
     start();
-  }, 750);
+  }), 750);
 }
 
 async function newGame() {
@@ -799,7 +818,10 @@ function showEndcard(part) {
   ui.show('endcard', true);
 }
 
-$('btn-keep').addEventListener('click', () => { ui.show('endcard', false); setMode('play'); updateLockHint(); requestPointer(); });
+$('btn-keep').addEventListener('click', () => {
+  ui.show('endcard', false);
+  poki.commercialBreak(audio).then(() => { setMode('play'); updateLockHint(); requestPointer(); });
+});
 $('btn-end-main').addEventListener('click', () => { persist(); ui.show('endcard', false); showTitle(); });
 
 // ------------------------------------------------------------------ pause & settings

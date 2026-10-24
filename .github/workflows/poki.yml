@@ -1,0 +1,39 @@
+name: Build Poki version
+
+# Builds the game with the Poki SDK and puts LOST-poki.zip on the "LOST for Poki" release page.
+# That zip is what gets uploaded on developers.poki.com.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: poki
+  cancel-in-progress: true
+
+jobs:
+  poki:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build:poki
+      # index.html must sit at the top of the zip, not inside a folder
+      - run: cd dist-poki && zip -r ../LOST-poki.zip . && cd .. && ls -l LOST-poki.zip
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete poki-latest --cleanup-tag --yes || true
+          gh release create poki-latest LOST-poki.zip \
+            --target "$GITHUB_SHA" \
+            --title "LOST for Poki" \
+            --latest=false \
+            --notes "Upload **LOST-poki.zip** on developers.poki.com (don't unzip it). It is the web game with the Poki SDK built in."

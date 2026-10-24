@@ -39,6 +39,16 @@ https://github.com/amitshabatgoltz-create/lost-island/releases/latest
 
 הקובץ נבנה אוטומטית ב-GitHub Actions (`.github/workflows/desktop.yml`) בכל עדכון של `main`. הקוד של האפליקציה נמצא ב-`desktop/` (Electron). להרצה מקומית: `npm run build`, להעתיק את `dist` אל `desktop/app`, ואז בתוך `desktop/` להריץ `npm install`, `npx install-electron` ו-`npm start`.
 
+## גרסה ל-Poki
+
+`npm run build:poki` בונה את המשחק עם ה-SDK של Poki לתיקייה `dist-poki`. בכל עדכון של `main` נבנה אוטומטית
+`LOST-poki.zip` בדף https://github.com/amitshabatgoltz-create/lost-island/releases/tag/poki-latest (`.github/workflows/poki.yml`),
+ואותו מעלים ב-developers.poki.com.
+
+- `src/poki.js` מדבר עם ה-SDK: מודיע מתי הטעינה נגמרה, מתי משחקים ומתי לא (לובי, הפסקה, סוף פרק), ומציג פרסומת קצרה רק ברגעים טבעיים: כשלוחצים "שחק" בלובי וכשממשיכים לחלק 2. בזמן הפרסומת הצליל מושתק.
+- בכל גרסה אחרת (האתר, המחשב) אין SDK, וכל הקריאות האלה לא עושות כלום.
+- הגופנים ארוזים בתוך המשחק (`@fontsource`) ולא נטענים מגוגל, כדי שהמשחק לא יפנה לאתרים אחרים.
+
 ## שליטה
 
 | מקש | פעולה |
