@@ -505,7 +505,7 @@ function refreshHUD(justAdded) {
   ui.setHintAvailable(!!(q.hints && q.hints.length));
   ui.setInventory(s, player.flashlightOn, justAdded);
   player.showBandage(has('bandage'));
-  player.holdFlashlight(has('flashlight'));
+  player.holdFlashlight(has('flashlight') && player.flashlightOn);
   if (game.zone) game.zone.sync(s);
 }
 
@@ -1030,8 +1030,10 @@ window.addEventListener('keydown', (e) => {
 window.addEventListener('keyup', (e) => { game.input[e.code] = false; });
 window.addEventListener('blur', () => { game.input = {}; });
 
+// F takes the flashlight out (in both hands, lit) or puts it away (plain walking, still in the inventory)
 function setFlashlight(on) {
   player.setFlashlight(on);
+  player.holdFlashlight(on && has('flashlight'));
   ui.setInventory(game.state, on);
 }
 

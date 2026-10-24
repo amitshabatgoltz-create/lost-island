@@ -51,7 +51,7 @@ function legPhase(a, ta, b) {
 }
 const MODEL_URL = './models/survivor.glb';
 // extra clips (tools/anims/README.md); a clip here replaces survivor.glb's clip of the same name
-const ANIM_URLS = ['start_walking', 'torch_start_walking', 'stop_walking', 'idle_to_running', 'turn_right_90', 'jump'].map((n) => `./models/anims/${n}.glb`);
+const ANIM_URLS = ['start_walking', 'torch_start_walking', 'stop_walking', 'idle_to_running', 'turn_right_90', 'jump', 'falling', 'fall_land'].map((n) => `./models/anims/${n}.glb`);
 const SCALE = 0.0104; // the model is authored in centimetres, 176 cm tall
 const WALK = 2.8, RUN = 5.8; // m/s
 // first steps from standing: Start_Walking (and its flashlight version) is a slower stroll than Walking, so it is sped
@@ -61,7 +61,12 @@ const START = {
   Torch_Start_Walking: { rate: 2.1, from: 0.3, to: 1.4 },
 };
 // clips whose forward travel moves the player (the hips travel is taken back out), by how they end
-const DRIVE = { Start_Walking: 'start', Torch_Start_Walking: 'start', Idle_To_Running: 'run', Stop_Walking: 'stop', Jump: 'jump' };
+const DRIVE = { Start_Walking: 'start', Torch_Start_Walking: 'start', Idle_To_Running: 'run', Stop_Walking: 'stop', Jump: 'jump', Fall_Land: 'land' };
+// falling off a drop: the ground falling away faster than this (m per m of travel, and m per frame) starts a fall
+const FALL_SLOPE = 2, FALL_STEP = 0.2;
+const GRAVITY = 22; // m/s², a little above real for a snappier fall
+const FALL_CLIP = 1.0; // the Falling clip shows once the survivor has dropped this far (m)
+const FALL_LAND = 2.0; // a fall from higher than this ends with the landing clip (m)
 // the flashlight clips (tools/anims) hold it in both hands; under the plain moves the upper body takes the same hold,
 // sampled from these clips at these times (standing / running)
 const HOLD_CLIPS = ['Torch_Start_Walking', 'Stop_Walking', 'Idle_To_Running', 'Jump', 'Turn_Right_90', 'Turn_Left_90'];
@@ -312,6 +317,7 @@ export class Player {
     this.camYaw = yaw + Math.PI;
     this.model.root.position.copy(this.pos);
     this.model.root.rotation.y = yaw;
+    this.air = null;
     this.cancelAction();
   }
 
@@ -323,7 +329,7 @@ export class Player {
     if (this.torchLens) this.torchLens.emissiveIntensity = on ? 1.2 : 0;
   }
 
-  // the survivor carries the flashlight (in both hands) from the moment it is found, on or off
+  // the survivor holds the flashlight in both hands while it is out (main.js: out = switched on with F)
   holdFlashlight(v) {
     this.holdTorch = v;
     this.torch.visible = v && this.torch.children.length > 0;
@@ -466,9 +472,28 @@ export class Player {
     return Math.max(0, (z2 - z1) / (2 * h)) * d.unit;
   }
 
+  // airborne: gravity, the Falling clip on a long drop, and the landing (Fall_Land after a high fall)
+  fall(dt, gh) {
+    const a = this.air;
+    a.vy -= GRAVITY * dt;
+    this.pos.y += a.vy * dt;
+    if (!a.falling && a.y0 - this.pos.y > FALL_CLIP && this.actions.Falling) {
+      a.falling = true;
+      this.cancelAction();
+      this.play('Falling', { loop: true, lock: true, fadeIn: 0.2, fadeOut: 0.15 });
+    }
+    if (this.pos.y > gh) return;
+    this.pos.y = gh;
+    this.air = null;
+    if (a.y0 - gh > FALL_LAND && this.drives.Fall_Land) {
+      this.play('Fall_Land', { from: 0.25, lock: true, fadeIn: 0.08, fadeOut: 0.3 });
+    } else if (this.act && this.act.name === 'Falling') this.act.ending = true;
+    this.still = this.speed < 0.2;
+  }
+
   // Space: a leap forward (the Jump clip's run-up is skipped)
   jump() {
-    if (!this.mixer || !this.drives.Jump || this.busy || (this.act && this.act.name === 'Jump')) return;
+    if (!this.mixer || !this.drives.Jump || this.busy || this.air || (this.act && this.act.name === 'Jump')) return;
     this.cancelAction();
     this.play('Jump', { timeScale: 1.2, from: 1.05, to: 2.45, lock: true, fadeIn: 0.15, fadeOut: 0.3 });
   }
@@ -484,6 +509,7 @@ export class Player {
   forward() { return new THREE.Vector3(-Math.sin(this.camYaw), 0, -Math.cos(this.camYaw)); }
 
   update(dt, input, controlEnabled) {
+    const x0 = this.pos.x, z0 = this.pos.z, gh0 = this.heightAt(x0, z0);
     // ---------- movement
     let mx = 0, mz = 0;
     const wantsMove = controlEnabled && (input.KeyW || input.ArrowUp || input.KeyS || input.ArrowDown || input.KeyA || input.ArrowLeft || input.KeyD || input.ArrowRight);
@@ -501,8 +527,8 @@ export class Player {
     const running = controlEnabled && (input.ShiftLeft || input.ShiftRight);
     const targetSpeed = (mx || mz) ? (running ? RUN : WALK) : 0;
     const accel = targetSpeed > this.speed ? 7 : 10;
-    this.speed += (targetSpeed - this.speed) * Math.min(1, dt * accel);
-    if (this.busy) this.speed *= Math.max(0, 1 - dt * 14);
+    if (!this.air) this.speed += (targetSpeed - this.speed) * Math.min(1, dt * accel); // in the air: no steering
+    if (this.busy && !this.air) this.speed *= Math.max(0, 1 - dt * 14); // in the air the survivor keeps the momentum
     const holdFacing = this.act && this.act.holdFacing;
     if (mx || mz) {
       const targetYaw = Math.atan2(mx, mz);
@@ -546,7 +572,7 @@ export class Player {
         this.actions[drive.kind === 'start' ? 'Walking' : 'Running'].time = drive.phase;
       } else {
         this.speed = this.driveSpeed(drive, dr.action.time) * dr.action.timeScale;
-        if (drive.kind === 'stop' || drive.kind === 'jump') this.moveDir = { x: Math.sin(this.facing), z: Math.cos(this.facing) };
+        if (drive.kind === 'stop' || drive.kind === 'jump' || drive.kind === 'land') this.moveDir = { x: Math.sin(this.facing), z: Math.cos(this.facing) };
       }
     }
     // fading out into the walk: the clip keeps pace with the ground so its planted foot does not slide
@@ -558,7 +584,14 @@ export class Player {
     }
     if (!(this.act && this.act.root)) {
       const gh = this.heightAt(this.pos.x, this.pos.z);
-      this.pos.y += (gh - this.pos.y) * Math.min(1, dt * 18);
+      const drop = gh0 - gh, step = Math.hypot(this.pos.x - x0, this.pos.z - z0);
+      // walking off a cliff: fall under gravity instead of sticking to the ground
+      if (!this.air && drop > FALL_STEP && drop > step * FALL_SLOPE) {
+        // slipping further down while still getting up from a landing: no second Falling clip
+        this.air = { y0: this.pos.y, vy: 0, falling: !!(this.act && this.act.name === 'Fall_Land') };
+      }
+      if (this.air) this.fall(dt, gh);
+      else this.pos.y += (gh - this.pos.y) * Math.min(1, dt * 18);
     }
 
     // out of breath after a long run
