@@ -430,7 +430,7 @@ export class IntroScene {
     const ui = this.ui, a = this.audio;
 
     // ---------------- outside shot
-    this.at(0.3, 'card', () => ui.titleCard('טיסה NV-2207 · 02:14 · מעל האוקיינוס השקט', 'שלוש שעות ליעד. סוף סוף חופשה.'));
+    this.at(0.3, 'card', () => ui.titleCard('Flight NV-2207 · 02:14 · over the Pacific Ocean', 'Three hours to go. A vacation, finally.'));
     this.at(3.4, 'strike', () => { this.ext.strike(); a.noiseBurst(2.2, 0.3, 'lowpass', 180, 0.35); });
     this.at(5.0, 'bump', () => { this.ext.bump(); a.thump(0.3); });
     this.at(CUT, 'cut', () => { this.outside = false; });
@@ -439,16 +439,16 @@ export class IntroScene {
     // ---------------- cabin timeline
     const T0 = CABIN_T0;
     this.at(T0 + 5.5, 'belt', () => { a.seatbelt(); this.signOn = true; });
-    this.at(T0 + 6.6, 'thought1', () => ui.subtitle('רק עוד כיס אוויר...', 'thought'));
+    this.at(T0 + 6.6, 'thought1', () => ui.subtitle('Just another air pocket...', 'thought'));
     this.at(T0 + 9.6, 'jolt', () => { a.thump(0.6); ui.subtitle(null); this.lightning = 1; });
     this.at(T0 + 11.2, 'pa', () => {
       a.chime(); a.radio(5.5);
-      ui.subtitle('“Ladies and gentlemen, this is the captain. We have lost several systems. Return to your seats and fasten your seatbelts — now.”', 'pa', 'גבירותיי ורבותיי, מדבר הקברניט. איבדנו כמה מערכות. חזרו למקומותיכם והדקו חגורות — מיד.');
+      ui.subtitle('“Ladies and gentlemen, this is the captain. We have lost several systems. Return to your seats and fasten your seatbelts — now.”', 'pa');
       setTimeout(() => this.running && a.speak('Ladies and gentlemen, this is the captain. We have lost several systems. Return to your seats and fasten your seatbelts. Now.'), 900);
     });
     this.at(T0 + 17.2, 'dark', () => { this.emergency = true; a.alarm(5); a.thump(0.5); ui.subtitle(null); this.masksDown = true; });
     this.at(T0 + 19.4, 'brace', () => {
-      ui.subtitle('“BRACE! BRACE! BRACE!”', 'pa', 'התכוננו לפגיעה!');
+      ui.subtitle('“BRACE! BRACE! BRACE!”', 'pa');
       a.speak('Brace! Brace! Brace!');
       this.bracing = true;
     });

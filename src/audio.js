@@ -78,10 +78,113 @@ export class AudioSystem {
     if (this.amb && this.ambientOn) this.amb.gain.setTargetAtTime(1, this.ctx.currentTime, 0.6);
   }
 
+  // inside the facility (Part 3): ventilation hum and electrical buzz instead of sea, wind and birds.
+  // hum 1 = mains power, 0 = power failure (the hum dies, only a thin emergency buzz is left)
+  setIndoor(k, hum = 1) {
+    this.indoor = k;
+    if (!this.ctx || (!k && !this.hum)) return;
+    const c = this.ctx, now = c.currentTime;
+    if (!this.hum) {
+      const out = c.createGain(); out.gain.value = 0; out.connect(this.master);
+      const n = this.noiseSource(true);
+      const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 260;
+      const vent = c.createGain(); vent.gain.value = 0.5;
+      n.connect(lp).connect(vent).connect(out); n.start();
+      const o = c.createOscillator(); o.type = 'sawtooth'; o.frequency.value = 50;
+      const olp = c.createBiquadFilter(); olp.type = 'lowpass'; olp.frequency.value = 180;
+      const mains = c.createGain(); mains.gain.value = 0.05;
+      o.connect(olp).connect(mains).connect(out); o.start();
+      const b = c.createOscillator(); b.type = 'square'; b.frequency.value = 120;
+      const bbp = c.createBiquadFilter(); bbp.type = 'bandpass'; bbp.frequency.value = 2400; bbp.Q.value = 3;
+      const buzz = c.createGain(); buzz.gain.value = 0;
+      b.connect(bbp).connect(buzz).connect(out); b.start();
+      this.hum = { out, vent, mains, buzz, next: 0 };
+    }
+    const h = this.hum;
+    h.out.gain.setTargetAtTime(k * 0.9, now, 0.6);
+    h.vent.gain.setTargetAtTime(0.18 + 0.32 * hum, now, 0.4);
+    h.mains.gain.setTargetAtTime(0.05 * hum, now, 0.3);
+    h.buzz.gain.setTargetAtTime(hum ? 0 : 0.006, now, 0.3);
+    // now and then a distant knock or tick of the old building
+    if (k > 0.5 && now > h.next) {
+      if (h.next) this.tone(60 + Math.random() * 40, 0.4, 0.05, 'sine');
+      h.next = now + 7 + Math.random() * 12;
+    }
+  }
+
+  // Part 3 sounds
+  generatorStart() {
+    if (!this.ctx) return;
+    [0, 0.7].forEach((w) => { this.noiseBurst(0.35, 0.35, 'lowpass', 300, w); this.tone(40, 0.3, 0.2, 'sawtooth', w); });
+    this.thump(0.4);
+    this.tone(55, 1.6, 0.12, 'sawtooth', 1.5);
+    this.noiseBurst(1.8, 0.25, 'lowpass', 500, 1.4);
+  }
+  // a running engine at a world position; returns a stop function
+  engineAt(pos) {
+    if (!this.ctx) return () => {};
+    const c = this.ctx;
+    const p = this.at(pos, { ref: 3, max: 60, life: 1e6 });
+    const o = c.createOscillator(); o.type = 'sawtooth'; o.frequency.value = 46;
+    const lfo = c.createOscillator(); lfo.frequency.value = 11;
+    const lg = c.createGain(); lg.gain.value = 0.4;
+    const g = c.createGain(); g.gain.value = 0.5;
+    lfo.connect(lg).connect(g.gain);
+    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 240;
+    const vol = c.createGain(); vol.gain.value = 0; vol.gain.setTargetAtTime(0.35, c.currentTime + 1.4, 0.4);
+    o.connect(g).connect(lp).connect(vol).connect(p);
+    o.start(); lfo.start();
+    return () => { vol.gain.setTargetAtTime(0, c.currentTime, 0.2); setTimeout(() => { try { o.stop(); lfo.stop(); p.disconnect(); } catch (e) { /* stopped */ } }, 800); };
+  }
+  heavyDoor() {
+    if (!this.ctx) return;
+    this.unlock();
+    this.thump(0.5);
+    const c = this.ctx, t0 = c.currentTime;
+    const o = c.createOscillator(); o.type = 'sawtooth';
+    o.frequency.setValueAtTime(70, t0 + 0.4); o.frequency.linearRampToValueAtTime(52, t0 + 3.2);
+    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 260;
+    const g = c.createGain(); g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(0.12, t0 + 0.7); g.gain.linearRampToValueAtTime(0.12, t0 + 2.9); g.gain.exponentialRampToValueAtTime(0.001, t0 + 3.4);
+    o.connect(lp).connect(g).connect(this.sfx); o.start(t0); o.stop(t0 + 3.5);
+    this.noiseBurst(3.0, 0.14, 'bandpass', 900, 0.4);
+    this.thump(0.6);
+    setTimeout(() => this.thump(0.7), 3200);
+  }
+  slideDoor() { this.latch(); this.noiseBurst(0.9, 0.12, 'bandpass', 1200, 0.1); this.tone(180, 0.6, 0.05, 'sawtooth', 0.1); }
+  powerDown() {
+    if (!this.ctx) return;
+    const c = this.ctx, t0 = c.currentTime;
+    const o = c.createOscillator(); o.type = 'sawtooth';
+    o.frequency.setValueAtTime(220, t0); o.frequency.exponentialRampToValueAtTime(30, t0 + 2.2);
+    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 800;
+    const g = c.createGain(); g.gain.setValueAtTime(0.14, t0); g.gain.exponentialRampToValueAtTime(0.001, t0 + 2.4);
+    o.connect(lp).connect(g).connect(this.sfx); o.start(t0); o.stop(t0 + 2.5);
+    this.thump(0.8);
+  }
+  emergencyOn() { this.thump(0.5); [0, 0.5, 1.0].forEach((w) => this.tone(587, 0.3, 0.06, 'square', w)); }
+  monitorOn() { this.tone(15600, 0.8, 0.02, 'sine'); this.noiseBurst(0.2, 0.15, 'highpass', 4000); this.tone(1046, 0.12, 0.05, 'sine', 0.3); }
+  // knocking behind a door at a world position
+  knock(pos, n = 3) {
+    if (!this.ctx) return;
+    const d = this.at(pos, { ref: 3, life: 6 });
+    for (let i = 0; i < n; i++) {
+      this.noiseBurst(0.12, 0.9, 'lowpass', 260, i * 0.55, d);
+      this.tone(70, 0.25, 0.4, 'sine', i * 0.55, d);
+    }
+  }
+  tapeStart() { this.latch(); this.noiseBurst(0.5, 0.06, 'lowpass', 2500, 0.2); }
+
   // called every frame with how close the player is to the shoreline/forest (0..1)
   updateAmbience(t, nearSea, nearForest, night = 0, nearStream = 0) {
     if (!this.ctx || !this.ambientOn) return;
     const c = this.ctx, now = c.currentTime;
+    if (this.indoor > 0.5) {
+      // the island cannot be heard inside the mountain
+      this.waveGain.gain.setTargetAtTime(0, now, 0.4);
+      this.windGain.gain.setTargetAtTime(0.004, now, 0.4);
+      this.updateNight(t, 0, 0);
+      return;
+    }
     this.updateNight(t, night, nearStream);
     if (night > 0.5) nearForest *= 0.25; // birds mostly sleep at night
     const swell = 0.55 + 0.45 * Math.sin(t * 0.55) * Math.sin(t * 0.21 + 1);

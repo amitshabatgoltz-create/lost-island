@@ -33,12 +33,12 @@ export function createForestInteractions(zone, api) {
     label: () => {
       const f = flags();
       if (!f.powerInstalled) {
-        if (f.wired) return 'כוון את התדר';
-        if (f.cellInserted) return 'פתח את לוח החיווט';
-        return has('powerCell') ? 'הכנס את תא הכוח' : 'בדוק את המשדר';
+        if (f.wired) return 'Tune the frequency';
+        if (f.cellInserted) return 'Open the wiring panel';
+        return has('powerCell') ? 'Insert the power cell' : 'Check the transmitter';
       }
-      if (q() === 14) return 'האזן לשידור';
-      return 'בדוק את המשדר';
+      if (q() === 14) return 'Listen to the broadcast';
+      return 'Check the transmitter';
     },
     use: () => {
       const f = flags();
@@ -48,12 +48,12 @@ export function createForestInteractions(zone, api) {
         if (has('powerCell')) return insertCell();
         api.audio.click();
         api.setFlag('transmitterInspected');
-        api.thought('המשדר מת. התא של מקור הכוח ריק, והדלת שלו פתוחה. על הלוח: RELAY 04. ובבוץ סביב — עקבות.', 5.5);
+        api.thought('The transmitter is dead. The power cell slot is empty and its door is open. On the panel: RELAY 04. And in the mud around it: tracks.', 5.5);
         return;
       }
       if (q() === 14) return startEnding();
       api.audio.click();
-      api.thought(f.endingSeen ? 'המשדר שותק. הצג כותב LINK: LOST.' : 'המשדר מזמזם על 417.9. אף אחד לא עונה.', 3.5);
+      api.thought(f.endingSeen ? 'The transmitter is silent. The display reads LINK: LOST.' : 'The transmitter hums on 417.9. Nobody answers.', 3.5);
     },
   });
 
@@ -64,7 +64,7 @@ export function createForestInteractions(zone, api) {
     zone.sync(api.state);
     api.refresh();
     api.persist();
-    api.thought('התא נכנס למקום. שום דבר. מאחורי הלוח — ארבעה חוטים מנותקים.', 4.5, 0.6);
+    api.thought('The cell clicks into place. Nothing. Behind the panel: four loose wires.', 4.5, 0.6);
   }
 
   function openWiring() {
@@ -81,7 +81,7 @@ export function createForestInteractions(zone, api) {
         zone.sync(api.state);
         api.refresh();
         api.persist();
-        api.thought('המסך נדלק. רק רעש. הוא מחפש משהו.', 4, 0.8);
+        api.thought('The screen lights up. Only static. It is searching for something.', 4, 0.8);
         return true;
       },
     });
@@ -97,9 +97,9 @@ export function createForestInteractions(zone, api) {
         api.seq.run([
           [0.2, () => { zone.sync(api.state); api.audio.signalBeeps(); }],
           [1.0, () => api.audio.radio(4.5)],
-          [1.3, () => api.subtitle('“...Nightjar relay... no civilian contact... observer remains on the ridge... [static]”', 'pa', '...ממסר נייטג׳אר... אין מגע אזרחי... הצופה נשאר על הרכס... [רעש]', 5)],
+          [1.3, () => api.subtitle('“...Nightjar relay... no civilian contact... observer remains on the ridge... [static]”', 'pa', '', 5)],
           [2.6, () => { api.collect('radioLog'); }],
-          [6.6, () => { busy = false; api.thought('המשדר הדפיס את היומן שלו. והוא שידר משהו על מחנה.', 4.5); api.checkQuests(); }],
+          [6.6, () => { busy = false; api.thought('The transmitter printed its log. And it broadcast something about a camp.', 4.5); api.checkQuests(); }],
         ]);
       },
     });
@@ -118,16 +118,16 @@ export function createForestInteractions(zone, api) {
     id: 'powerCell', kind: 'pickup', obj: cellMesh, glint: cellGlint, x: FL.powerCell.x, z: FL.powerCell.z, radius: 2.0,
     available: () => crateOpen() && !has('powerCell') && !flags().powerInstalled,
     visible: () => crateOpen() && !has('powerCell') && !flags().powerInstalled,
-    label: () => `אסוף: ${ITEMS.powerCell.name}`,
-    use: () => { if (api.collect('powerCell')) api.thought('48 וולט, עם אותו סמל. מישהו הוציא אותו מהמשדר — ונעל אותו כאן.', 4.5, 0.6); },
+    label: () => `Pick up: ${ITEMS.powerCell.name}`,
+    use: () => { if (api.collect('powerCell')) api.thought('48 volts, with the same symbol. Someone took it out of the transmitter and locked it in here.', 4.5, 0.6); },
   });
   let lockTries = 0;
   add({
     id: 'supplyDrop', kind: 'container', x: FL.powerCell.x, z: FL.powerCell.z, radius: 2.0,
     available: () => !crateOpen(),
-    label: () => 'מנעול עם שלושה סימנים',
+    label: () => 'Lock with three symbols',
     use: () => {
-      if (!flags().crateSeen) { api.setFlag('crateSeen'); api.thought('ארגז אספקה שהוצנח. נעול במנעול עם שלושה גלגלים — על כל גלגל סימנים, לא מספרים.', 4.5); }
+      if (!flags().crateSeen) { api.setFlag('crateSeen'); api.thought('An air-dropped supply crate. Locked with a three-wheel lock: symbols on each wheel, not numbers.', 4.5); }
       api.openSymbolLock({
         symbols: SYMBOLS,
         size: CRATE_CODE.length,
@@ -137,13 +137,13 @@ export function createForestInteractions(zone, api) {
             api.audio.unlock();
             zone.sync(api.state);
             api.collect('serviceCard', { silent: true });
-            api.thought('נפתח. בפנים: תא הכוח — וכרטיס שירות של המשדר.', 4, 0.5);
+            api.thought('Open. Inside: the power cell, and a service card for the transmitter.', 4, 0.5);
             api.persist();
             return true;
           }
           lockTries++;
           api.audio.deny();
-          if (lockTries === 3) api.thought('לא סתם סימנים. ראיתי סימנים כאלה בדרך לכאן.', 3.5);
+          if (lockTries === 3) api.thought('These are not random symbols. I saw symbols like these on the way here.', 3.5);
           return false;
         },
       });
@@ -155,15 +155,15 @@ export function createForestInteractions(zone, api) {
     add({
       id: c.id, kind: 'examine', x: c.look.x, z: c.look.z, radius: 2.0,
       available: () => true,
-      label: () => 'בחן את הסימן שבקליפה',
+      label: () => 'Examine the mark in the bark',
       use: () => {
         api.audio.click();
-        const notch = ['', 'חריץ אחד', 'שני חריצים', 'שלושה חריצים'][c.notches];
-        api.thought(`מישהו חרט בקליפה: ${symbolName(c.symbol)}. ומתחתיו — ${notch}.`, 4);
+        const notch = ['', 'one notch', 'two notches', 'three notches'][c.notches];
+        api.thought(`Someone carved into the bark: a ${symbolName(c.symbol).toLowerCase()}. And under it, ${notch}.`, 4);
         if (!flags()[c.id]) {
           api.setFlag(c.id);
           if (!has('carvings')) api.collect('carvings', { silent: true });
-          else api.toast('החוברת עודכנה: סימנים חרוטים', 'item', 2.5);
+          else api.toast('Booklet updated: carved symbols', 'item', 2.5);
           api.persist();
         }
       },
@@ -175,54 +175,54 @@ export function createForestInteractions(zone, api) {
   add({
     id: 'tent', kind: 'examine', x: tentFront.x, z: tentFront.z, radius: 2.4,
     available: () => true,
-    label: () => 'בדוק את האוהל',
+    label: () => 'Check the tent',
     use: () => {
       api.audio.click();
-      api.thought('הבד קרוע מבפנים, לא מבחוץ. שק שינה, ומגף אחד. רק אחד.', 4.5);
+      api.thought('The fabric is torn from the inside, not the outside. A sleeping bag, and one boot. Just one.', 4.5);
       if (!flags().tentSeen) { api.setFlag('tentSeen'); api.checkQuests(); }
     },
   });
   add({
     id: 'cabinMap', kind: 'examine', x: P.cabin.spots.map.x, z: P.cabin.spots.map.z, radius: 1.5,
     available: () => true,
-    label: () => (has('campMap') ? 'הסתכל על המפה' : 'קח את המפה מהקיר'),
+    label: () => (has('campMap') ? 'Look at the map' : 'Take the map off the wall'),
     use: () => {
       if (!has('campMap')) {
         api.collect('campMap');
-        api.thought('מפה של היער. ובקצה — X אדום על החוף, בדיוק איפה שהמטוס נפל. “LZ-2”.', 5, 0.5);
-      } else api.thought('LZ-2. הם סימנו את מקום הנחיתה לפני שהיא קרתה.', 3.5);
+        api.thought('A map of the forest. And at the edge, a red X on the beach, exactly where the plane went down. “LZ-2”.', 5, 0.5);
+      } else api.thought('LZ-2. They marked the landing spot before it happened.', 3.5);
       if (!flags().cabinSeen) { api.setFlag('cabinSeen'); api.checkQuests(); }
     },
   });
   add({
     id: 'calendar', kind: 'examine', x: P.cabin.spots.calendar.x, z: P.cabin.spots.calendar.z, radius: 1.3,
     available: () => true,
-    label: () => 'בחן את לוח השנה',
+    label: () => 'Examine the calendar',
     use: () => {
       api.audio.click();
-      api.thought('ספטמבר. שני ימים מוקפים באדום: 14 — “APPROVED”. ו־23 — “ARRIVAL · LZ-2”.', 4.8);
+      api.thought('September. Two days circled in red: 14, “APPROVED”. And 23, “ARRIVAL · LZ-2”.', 4.8);
       if (!has('calendar')) api.collect('calendar', { silent: true });
     },
   });
-  examine('cabinDesk', P.cabin.spots.desk, 'בדוק את השולחן בבקתה', 'כוס קפה עם עובש ודפים עם מספרים. מי שגר כאן עזב בחיפזון — הכיסא עוד הפוך.', 1.4);
-  examine('cabinShelf', P.cabin.spots.shelf, 'בדוק את המדף', 'צנצנות עם דגימות אדמה ומים, מתויגות בתאריכים. האחרונה: 22 בספטמבר. יום לפני הטיסה.', 1.4);
+  examine('cabinDesk', P.cabin.spots.desk, 'Check the desk in the hut', 'A moldy coffee cup and pages of numbers. Whoever lived here left in a hurry: the chair is still knocked over.', 1.4);
+  examine('cabinShelf', P.cabin.spots.shelf, 'Check the shelf', 'Jars of soil and water samples, labeled with dates. The last one: September 22. The day before the flight.', 1.4);
   const tableFront = front(FL.table, 1.15);
   add({
     id: 'table', kind: 'examine', x: tableFront.x, z: tableFront.z, radius: 1.9,
     available: () => true,
-    label: () => (has('photo') ? 'בדוק את המסמכים' : 'בדוק את המסמכים והתמונות'),
+    label: () => (has('photo') ? 'Check the papers' : 'Check the papers and photos'),
     use: () => {
       if (!has('photo')) {
         api.collect('photo');
-        api.thought('תצלומים של האי, מהים. באחד מהם — מישהו עומד ליד התורן. בגב: “N. — השבוע הראשון. הכל לפי התוכנית.”', 5.5, 0.5);
-      } else api.thought('“קליטת נבדקים — ראה פרוטוקול 3”. השאר מושחר.', 3.5);
+        api.thought('Photos of the island, from the sea. In one of them, someone stands by the mast. On the back: “N. — first week. All according to plan.”', 5.5, 0.5);
+      } else api.thought('“Subject intake: see protocol 3.” The rest is blacked out.', 3.5);
       if (!flags().tableSeen) { api.setFlag('tableSeen'); api.checkQuests(); }
     },
   });
-  examine('campRadio', { x: P.table.radioPos.x, z: P.table.radioPos.z }, 'בדוק את מכשיר הקשר', 'מכשיר קשר ידני, מכוון ל־417.9. הסוללה חמה. מישהו החזיק אותו לא מזמן.', 1.2);
-  examine('crates', FL.crates, 'בדוק את ארגזי הציוד', 'ארגזי ציוד עם אותו סמל ו־“NJ · FIELD 04”. ריקים. מישהו פינה אותם לפני שעזב.', 2.2);
-  examine('generator', FL.generator, 'בדוק את הגנרטור', 'גנרטור מפורק. החלקים לא נשברו — הם הוצאו בזהירות, אחד אחד.', 2.0);
-  examine('dish', FL.dish, 'בדוק את צלחת הלוויין', 'הצלחת מכוונת דרומה. לא לשמיים — לים. לכיוון שממנו הגענו.', 2.0);
+  examine('campRadio', { x: P.table.radioPos.x, z: P.table.radioPos.z }, 'Check the radio', 'A handheld radio tuned to 417.9. The battery is warm. Someone held it not long ago.', 1.2);
+  examine('crates', FL.crates, 'Check the equipment crates', 'Equipment crates with the same symbol and “NJ · FIELD 04”. Empty. Someone cleared them out before leaving.', 2.2);
+  examine('generator', FL.generator, 'Check the generator', 'A stripped generator. The parts were not broken, they were removed carefully, one by one.', 2.0);
+  examine('dish', FL.dish, 'Check the satellite dish', 'The dish points south. Not at the sky, at the sea. Toward where we came from.', 2.0);
 
   // ------------------------------------------------------------------ locker (code = relay frequency)
   const lockerFront = front(FL.locker, 0.95);
@@ -231,17 +231,17 @@ export function createForestInteractions(zone, api) {
   add({
     id: 'locker', kind: 'container', x: lockerFront.x, z: lockerFront.z, radius: 1.7,
     available: () => !flags().lockerOpen && !lidAnim,
-    label: () => 'הקש קוד בארגז הנעול',
+    label: () => 'Enter the locker code',
     use: () => {
-      if (!flags().lockerHint) { api.setFlag('lockerHint'); api.thought('על המכסה, בשבלונה: “ACCESS: APPROVAL / ARRIVAL”.', 4.5); }
+      if (!flags().lockerHint) { api.setFlag('lockerHint'); api.thought('Stenciled on the lid: “ACCESS: APPROVAL / ARRIVAL”.', 4.5); }
       api.openKeypad({
-        title: 'ארגז נעול · ACCESS: APPROVAL / ARRIVAL',
+        title: 'Locked locker · ACCESS: APPROVAL / ARRIVAL',
         length: 4,
         onSubmit: (code) => {
           if (code === LOCKER_CODE) { openLocker(); return true; }
           attempts++;
           api.audio.deny();
-          if (attempts === 3) api.thought('APPROVAL, ARRIVAL. שני רגעים. ארבע ספרות... שני מספרים של שתי ספרות?', 4.5);
+          if (attempts === 3) api.thought('APPROVAL, ARRIVAL. Two moments. Four digits... two numbers of two digits each?', 4.5);
           return false;
         },
       });
@@ -254,7 +254,7 @@ export function createForestInteractions(zone, api) {
     P.locker.ledMat.emissive.setHex(0x3cff88);
     api.animate(1.1, (k) => { P.locker.lidPivot.rotation.x = -k * k * (3 - 2 * k) * 1.9; }, () => {
       lidAnim = false;
-      api.thought('בפנים: תיקייה עם הסמל, ודף משמרות מלוכלך בבוץ.', 4);
+      api.thought('Inside: a folder with the symbol, and a muddy shift sheet.', 4);
       api.checkQuests();
     });
     api.checkQuests();
@@ -266,11 +266,11 @@ export function createForestInteractions(zone, api) {
       id, kind: 'pickup', obj: mesh, x: docPos.x, z: docPos.z, radius: 1.7,
       available: () => flags().lockerOpen && !lidAnim && !has(id),
       visible: () => !has(id),
-      label: () => `אסוף: ${ITEMS[id].name}`,
+      label: () => `Pick up: ${ITEMS[id].name}`,
       use: () => {
         api.collect(id);
-        if (id === 'researchDoc') api.thought('“נבדקים”. “ירידה לא מתוכננת”. הם קוראים להתרסקות כניסה.', 4.5, 0.5);
-        if (id === 'schedule') api.thought('צופה על הרכס המזרחי. “23/9 · 02:41 — יש מגע.” דקה אחרי שנפלנו.', 4.5, 0.5);
+        if (id === 'researchDoc') api.thought('“Subjects.” “Unplanned descent.” They call the crash an entry.', 4.5, 0.5);
+        if (id === 'schedule') api.thought('An observer on the east ridge. “23/9 · 02:41 — contact.” One minute after we crashed.', 4.5, 0.5);
       },
     });
   }
@@ -283,23 +283,23 @@ export function createForestInteractions(zone, api) {
     id: 'routeChart', kind: 'pickup', obj: P.post.chart, glint: chartGlint, x: FL.routeChart.x + 0.6, z: FL.routeChart.z + 0.8, radius: 1.9,
     available: () => q() >= 13 && !has('routeChart'),
     visible: () => !has('routeChart'),
-    label: () => `אסוף: ${ITEMS.routeChart.name}`,
+    label: () => `Pick up: ${ITEMS.routeChart.name}`,
     use: () => { api.collect('routeChart'); startEncounter(); },
   });
   add({
     id: 'postBoard', kind: 'examine', x: FL.routeChart.x + 0.6, z: FL.routeChart.z + 0.8, radius: 1.9,
     available: () => q() < 13 && !has('routeChart'),
-    label: () => 'בדוק את הלוח',
-    use: () => { api.audio.click(); api.thought('תרשים טיסה נעוץ בלוח. קודם אני צריך להבין מה הם עשו במחנה.', 3.8); },
+    label: () => 'Check the board',
+    use: () => { api.audio.click(); api.thought('A flight chart pinned to the board. First I need to understand what they did at the camp.', 3.8); },
   });
-  examine('scope', FL.scope, 'הסתכל דרך המשקפת', 'המשקפת מכוונת דרומה, אל החוף. בדיוק אל המקום שבו התעוררתי.', 1.6);
+  examine('scope', FL.scope, 'Look through the binoculars', 'The binoculars point south, at the beach. Exactly where I woke up.', 1.6);
 
   // spotting scope at the camp: pan across the forest and find the lens glint on the ridge
   const SC = FL.campScope;
   add({
     id: 'campScope', kind: 'machine', x: SC.x - 1.0, z: SC.z - 0.3, radius: 1.6,
     available: () => true,
-    label: () => 'הבט במשקפת',
+    label: () => 'Use the binoculars',
     use: () => {
       const eye = new THREE.Vector3(SC.x, terrainHeight(SC.x, SC.z) + 1.45, SC.z);
       api.openScope({
@@ -312,7 +312,7 @@ export function createForestInteractions(zone, api) {
           if (flags().postSpotted) return;
           api.setFlag('postSpotted');
           api.audio.sting();
-          api.thought('נצנוץ. על הרכס המזרחי, מעל הצוק — עדשה. מישהו הציב שם משהו.', 4.5);
+          api.thought('A glint. On the east ridge, above the cliff: a lens. Someone set something up there.', 4.5);
           api.persist();
         },
       });
@@ -329,7 +329,7 @@ export function createForestInteractions(zone, api) {
   function startEncounter() {
     if (encounter) return;
     encounter = api.seq.run([
-      [0.6, () => api.thought('מישהו ישב כאן וצפה בהתרסקות. מכאן.', 3.2)],
+      [0.6, () => api.thought('Someone sat here and watched the crash. From here.', 3.2)],
       [3.4, () => api.audio.branchSnap(figStart)],
       [3.7, () => api.flickerFlashlight(1.6)],
       [3.9, () => {
@@ -341,11 +341,11 @@ export function createForestInteractions(zone, api) {
         api.audio.sting();
       }],
       [5.5, () => { figMove = { t: 0, dur: 1.3 }; api.audio.footstepsRun(figStart, figEnd, 1.3); }],
-      [6.9, () => { fig.visible = false; figMove = null; api.thought('מי שם?!', 2.4); }],
+      [6.9, () => { fig.visible = false; figMove = null; api.thought('Who\'s there?!', 2.4); }],
       [10.2, () => {
         api.audio.radio(2.5);
         api.audio.signalBeeps();
-        api.toast('הרדיו במשדר התעורר. מישהו משדר אליו.', 'warn', 4.5);
+        api.toast('The radio in the transmitter woke up. Someone is calling it.', 'warn', 4.5);
         api.setFlag('encounterDone');
         encounter = null;
         api.checkQuests();
@@ -383,10 +383,10 @@ export function createForestInteractions(zone, api) {
     api.audio.radio(8);
     const steps = [
       [1.0, () => {
-        api.subtitle('“We know you survived.”', 'pa', 'אנחנו יודעים ששרדת.', 3.4);
+        api.subtitle('“We know you survived.”', 'pa', '', 3.4);
         api.audio.speak('We know you survived. Do not trust anyone coming to the island.', { pitch: 0.55, rate: 0.82 });
       }],
-      [4.5, () => api.subtitle('“Do not trust anyone coming to the island.”', 'pa', 'אל תסמוך על אף אחד שמגיע לאי.', 3.8)],
+      [4.5, () => api.subtitle('“Do not trust anyone coming to the island.”', 'pa', '', 3.8)],
       [8.6, () => { api.audio.spark(); P.transmitter.setRed('off'); P.transmitter.setScreen('dead'); }],
       [10.4, () => { zone.setNewSignal(true); api.audio.signalBeeps(); }],
     ];
@@ -427,7 +427,7 @@ export function createForestInteractions(zone, api) {
     const dT = Math.hypot(px - T.x, pz - T.z);
     if (!f.reachedTransmitter && dT < 13) {
       api.setFlag('reachedTransmitter');
-      api.thought('המשדר. מישהו בנה אותו כאן, באמצע היער — והוא מת.', 4);
+      api.thought('The transmitter. Someone built it here, in the middle of the forest, and it is dead.', 4);
       api.checkQuests();
     }
     // brief movement between the trees on the way to the signal
@@ -442,31 +442,31 @@ export function createForestInteractions(zone, api) {
       fig.visible = true;
       figMove = { t: 0, dur: 1.1, from: a, to: b };
       api.audio.branchSnap(a);
-      api.seq.after(1.15, () => { fig.visible = false; figMove = null; api.thought('...היה שם מישהו? בין העצים.', 3); });
+      api.seq.after(1.15, () => { fig.visible = false; figMove = null; api.thought('...was someone there? Between the trees.', 3); });
     }
     // the camp radio wakes up on its own
     if (!f.campRadio && !campRadioRun && Math.hypot(px - FL.camp.x, pz - FL.camp.z) < 16) {
       campRadioRun = true;
       P.table.radioLedMat.emissiveIntensity = 3;
       api.audio.radioAt(P.table.radioPos, 5);
-      api.subtitle('“...camp, this is ridge... movement at L-Z two... say again...”', 'pa', '...מחנה, כאן הרכס... יש תנועה ב־LZ-2... חזור...', 4.8);
-      api.seq.after(5, () => { P.table.radioLedMat.emissiveIntensity = 0; api.setFlag('campRadio'); campRadioRun = false; api.thought('המכשיר על השולחן. הוא נדלק לבד.', 3); });
+      api.subtitle('“...camp, this is ridge... movement at L-Z two... say again...”', 'pa', '', 4.8);
+      api.seq.after(5, () => { P.table.radioLedMat.emissiveIntensity = 0; api.setFlag('campRadio'); campRadioRun = false; api.thought('The radio on the table. It turned on by itself.', 3); });
     }
     // footprint hints
     const [sx, sz] = PRINTS.toPower[0];
     if (!f.printsPower && s.questIndex === 8 && Math.hypot(px - sx, pz - sz) < 7) {
       api.setFlag('printsPower');
-      api.thought('עקבות מגפיים בבוץ. הן יוצאות מהמשדר מערבה.', 3.5);
+      api.thought('Boot prints in the mud. They lead west from the transmitter.', 3.5);
     }
     const [rx, rz] = PRINTS.toRidge[0];
     if (!f.printsRidge && s.questIndex >= 12 && Math.hypot(px - rx, pz - rz) < 6) {
       api.setFlag('printsRidge');
-      api.thought('עקבות טריות. מישהו הלך מהמחנה מזרחה, אל הרכס — הלילה.', 3.8);
+      api.thought('Fresh tracks. Someone walked east from the camp toward the ridge, tonight.', 3.8);
     }
     const [ux, uz] = PRINTS.stray[0];
     if (!f.printsStray && Math.hypot(px - ux, pz - uz) < 5) {
       api.setFlag('printsStray');
-      api.thought('העקבות האלה הולכות ישר אל קצה הצוק... ונעלמות.', 3.8);
+      api.thought('These tracks go straight to the edge of the cliff... and vanish.', 3.8);
     }
     // a scripted encounter interrupted by a reload restarts
     if (has('routeChart') && !f.encounterDone && !encounter) startEncounter();
