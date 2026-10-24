@@ -322,7 +322,7 @@ export class Player {
     if (this.torchLens) this.torchLens.emissiveIntensity = on ? 1.2 : 0;
   }
 
-  // the survivor carries the flashlight (in both hands) from the moment it is found, on or off
+  // the survivor holds the flashlight in both hands while it is out (main.js: out = switched on with F)
   holdFlashlight(v) {
     this.holdTorch = v;
     this.torch.visible = v && this.torch.children.length > 0;
