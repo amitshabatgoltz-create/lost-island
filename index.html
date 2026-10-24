@@ -23,18 +23,48 @@
     </div>
   </div>
 
-  <!-- title -->
+  <!-- main lobby: the 3D beach shows through; the survivor you play stands on the sand -->
   <div id="title" class="screen hidden">
-    <div class="title-inner">
+    <div class="lobby-brand">
       <div class="logo"><span class="logo-lost">LOST</span><span class="logo-sub">THE MISSING ISLAND</span></div>
       <div class="chapter" id="chapter">חלק 1 · ההתרסקות · חלק 2 · האות</div>
+    </div>
+    <div class="lobby-menu">
+      <button id="btn-play" class="btn play"><span class="play-icon" aria-hidden="true"></span><span id="btn-play-label">שחק</span></button>
+      <div id="play-note" class="play-note"></div>
       <div class="menu">
-        <button id="btn-continue" class="btn primary hidden">המשך</button>
-        <button id="btn-new" class="btn">משחק חדש</button>
+        <button id="btn-new" class="btn hidden">משחק חדש</button>
+        <button id="btn-skin" class="btn">החלף דמות</button>
         <button id="btn-title-settings" class="btn ghost">הגדרות</button>
       </div>
       <div id="save-info" class="save-info"></div>
-      <div class="title-foot">מומלץ לשחק עם אוזניות · עכבר ומקלדת</div>
+    </div>
+    <div class="lobby-tag" id="lobby-tag"><span class="tag-kicker">הניצול שלך</span><span class="tag-name" id="lobby-name"></span><span class="tag-role" id="lobby-role"></span></div>
+    <div class="title-foot">מומלץ לשחק עם אוזניות · עכבר ומקלדת</div>
+  </div>
+
+  <!-- character selection (first launch, and "change character" in the lobby) -->
+  <div id="select" class="screen hidden">
+    <button id="sel-prev" class="sel-arrow prev" aria-label="הדמות הקודמת"><span>›</span></button>
+    <button id="sel-next" class="sel-arrow next" aria-label="הדמות הבאה"><span>‹</span></button>
+    <div class="sel-panel">
+      <div class="select-head">
+        <div class="select-kicker" id="select-kicker">לפני שממריאים</div>
+        <h2>בחר את הניצול שלך</h2>
+      </div>
+      <div class="sel-info" aria-live="polite">
+        <div class="sel-count" id="sel-count"></div>
+        <div class="sel-name" id="sel-name"></div>
+        <div class="sel-role" id="sel-role"></div>
+        <p class="sel-desc" id="sel-desc"></p>
+        <div class="sel-current hidden" id="sel-current">הדמות הנוכחית שלך</div>
+      </div>
+      <div id="sel-cards" class="sel-cards" role="listbox" aria-label="דמויות"></div>
+      <div class="sel-actions">
+        <button id="sel-confirm" class="btn play">אישור בחירה</button>
+        <button id="sel-back" class="btn ghost">ביטול</button>
+      </div>
+      <div class="sel-help">חצים במקלדת לדפדוף · גרור כדי לסובב · Enter לאישור</div>
     </div>
   </div>
 

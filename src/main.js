@@ -19,6 +19,8 @@ import { RECIPES } from './data/recipes.js';
 import { createPost } from './gfx/post.js';
 import { GFX } from './gfx/materials.js';
 import { setAnisotropy } from './gfx/textures.js';
+import { Lobby } from './lobby.js';
+import { DEFAULT_SKIN } from './data/skins.js';
 
 // zones are separate chunks, loaded on demand and disposed when left
 const ZONES = {
@@ -70,7 +72,7 @@ const game = {
   cineCam: null,
   lastDispose: null,
 };
-let env, player, intro;
+let env, player, intro, lobby;
 
 window.addEventListener('resize', () => {
   renderer.setSize(innerWidth, innerHeight);
@@ -176,12 +178,19 @@ async function boot() {
     player = new Player(env.scene, camera);
     player.onBoundary = onBoundary;
     ui.setLoading(0.02, 'הדמות');
-    await player.load((p) => ui.setLoading(0.02 + p * 0.08, 'הדמות'));
+    const onSkin = (p) => ui.setLoading(0.02 + p * 0.08, 'הדמות');
+    try {
+      await player.load(onSkin, settings.skin || DEFAULT_SKIN);
+    } catch (err) {
+      // a missing or broken skin file must never block the game: fall back to the original survivor
+      console.error(err);
+      if (!player.mixer) await player.setSkin(DEFAULT_SKIN);
+    }
     intro = new IntroScene(audio, ui);
+    lobby = new Lobby({ player, camera, settings, ui, hooks: { click: () => audio.click() } });
     applySettings();
-    const saved = loadState();
-    // the title screen shows wherever the player last was
-    await loadZone(saved && saved.flags.introDone ? saved.zone : 'beach', (p, t) => ui.setLoading(0.1 + p * 0.82, t), saved);
+    // the lobby is on the beach; continuing in the forest loads it after PLAY
+    await loadZone('beach', (p, t) => ui.setLoading(0.1 + p * 0.82, t), loadState());
   } catch (err) {
     console.error(err);
     ui.setLoading(1, 'שגיאה בטעינת העולם. נסה לרענן את הדף.');
@@ -494,23 +503,73 @@ function partLabel(s) {
   return `חלק ${q.part} · משימה ${s.questIndex - first + 1}`;
 }
 
-function showTitle() {
+// main lobby on the beach (the forest is left behind if the player was there)
+async function showTitle() {
   setMode('title');
+  game.starting = false;
   audio.stopSpeech();
+  audio.stopAmbience();
   seq.clear();
-  ['title'].forEach((id) => ui.show(id, true));
-  ['hud', 'pause', 'endcard', 'keypad', 'final-entry'].forEach((id) => ui.show(id, false));
+  game.anims.length = 0;
+  ['hud', 'pause', 'endcard', 'keypad', 'final-entry', 'reveal', 'skip-hint'].forEach((id) => ui.show(id, false));
   ui.subtitle(null);
   ui.blur(0);
   ui.eyes('hidden');
-  ui.fade(0, 0.8);
-  const saved = loadState();
-  const canContinue = saved && saved.flags.introDone;
-  ui.show('btn-continue', !!canContinue);
-  $('save-info').textContent = canContinue
-    ? `שמירה אחרונה: ${new Date(saved.savedAt).toLocaleString('he-IL')} · ${partLabel(saved)}`
-    : storageAvailable() ? '' : 'שים לב: הדפדפן חוסם שמירה מקומית — ההתקדמות לא תישמר.';
   if (document.pointerLockElement) { game.suppressPause = true; document.exitPointerLock(); }
+  if (game.zone.id !== 'beach') {
+    ui.fade(1, 0);
+    ui.show('loading', true);
+    ui.setLoading(0, 'חוזר אל החוף…');
+    await loadZone('beach', (p, t) => ui.setLoading(p, t), loadState() || game.state);
+    ui.show('loading', false);
+  }
+  // the lobby is always a clear day on the beach, whatever time it is in the story
+  env.setTime('day');
+  post.setMood('lobby');
+  lobby.enter(game.zone);
+  refreshLobbyMenu();
+  lobbySound();
+  ui.fade(0, 1.2);
+}
+
+function refreshLobbyMenu() {
+  const saved = loadState();
+  const canContinue = !!(saved && saved.flags.introDone);
+  $('btn-play-label').textContent = canContinue ? 'המשך לשחק' : 'שחק';
+  $('play-note').textContent = canContinue ? `ממשיך מאיפה שעצרת · ${partLabel(saved)}` : 'מתחיל מההתחלה: הטיסה, ההתרסקות והאי';
+  ui.show('btn-new', canContinue);
+  $('save-info').textContent = canContinue
+    ? `שמירה אחרונה: ${new Date(saved.savedAt).toLocaleString('he-IL')}`
+    : storageAvailable() ? '' : 'שים לב: הדפדפן חוסם שמירה מקומית — ההתקדמות לא תישמר.';
+}
+
+// waves and birds behind the lobby; browsers only allow sound after the first click or key press
+function lobbySound() {
+  if (game.mode !== 'title' || !audio.ctx) return;
+  audio.startAmbience();
+  audio.resumeAmbience();
+}
+for (const ev of ['pointerdown', 'keydown']) {
+  window.addEventListener(ev, () => {
+    if (game.mode !== 'title' || audio.ctx) return;
+    audio.init();
+    audio.setVolume(settings.volume);
+    lobbySound();
+  });
+}
+
+// PLAY / NEW GAME leave the lobby once: fade to black, then the existing flow takes over
+function leaveLobby(start) {
+  if (game.mode !== 'title' || game.starting || lobby.view !== 'lobby') return;
+  game.starting = true;
+  audio.init();
+  audio.click();
+  ui.fade(1, 0.7);
+  setTimeout(() => {
+    lobby.leave();
+    game.starting = false;
+    start();
+  }, 750);
 }
 
 async function newGame() {
@@ -519,7 +578,7 @@ async function newGame() {
   game.anims.length = 0;
   game.state = freshState();
   setFlashlight(false);
-  ui.show('title', false);
+  lobby.leave();
   audio.init();
   audio.setVolume(settings.volume);
   // the forest may be loaded (title showed it); bring the beach back while the intro plays
@@ -534,7 +593,7 @@ async function continueGame() {
   if (!saved || !saved.flags.introDone) return newGame();
   seq.clear();
   game.state = saved;
-  ui.show('title', false);
+  lobby.leave();
   audio.init();
   audio.setVolume(settings.volume);
   ui.fade(1, 0);
@@ -544,6 +603,7 @@ async function continueGame() {
     ui.show('loading', false);
   }
   applyZoneEnv();
+  game.zone.sync(game.state);
   const p = saved.player && (saved.player.zone || 'beach') === game.zone.id ? saved.player : Object.values(game.zone.spawns)[0];
   player.setPosition(p.x, p.z, p.yaw ?? 0);
   player.lying = 0;
@@ -806,11 +866,14 @@ bindSetting('set-shadows', 'shadows', 'checked');
 $('btn-resume').addEventListener('click', resume);
 $('btn-main').addEventListener('click', () => { persist(); ui.show('pause', false); showTitle(); });
 $('btn-new2').addEventListener('click', () => confirmNew(() => { ui.show('pause', false); newGame(); }));
-$('btn-continue').addEventListener('click', () => { audio.init(); continueGame(); });
+$('btn-play').addEventListener('click', () => {
+  const saved = loadState();
+  leaveLobby(saved && saved.flags.introDone ? continueGame : newGame);
+});
 $('btn-new').addEventListener('click', () => {
   audio.init();
   const saved = loadState();
-  if (saved && saved.flags.introDone) confirmNew(newGame); else newGame();
+  if (saved && saved.flags.introDone) confirmNew(() => leaveLobby(newGame)); else leaveLobby(newGame);
 });
 $('btn-title-settings').addEventListener('click', () => {
   $('pause-title').textContent = 'הגדרות';
@@ -956,11 +1019,13 @@ function step(dt) {
   const zone = game.zone;
   if (!zone || game.mode === 'transition') return;
   const m = game.mode;
-  player.model.root.visible = m !== 'title';
   if (m === 'title') {
-    zone.titleCamera(camera, game.time * 0.04);
-    env.update(dt, game.time, camera.position, camera);
-    zone.update(dt, game.time, camera.position, camera);
+    if (!lobby.active) return;
+    lobby.update(dt);
+    env.update(dt, game.time, player.pos, camera);
+    zone.update(dt, game.time, player.pos, camera);
+    audio.updateListener(camera);
+    audio.updateAmbience(game.time, 0.8, 0.3, 0, 0);
     return;
   }
   if (m === 'wake') {
@@ -1055,6 +1120,7 @@ if (DEBUG) {
     get zone() { return game.zone; },
     get env() { return env; },
     get intro() { return intro; },
+    get lobby() { return lobby; },
     teleport(x, z) { player.setPosition(x, z, player.facing); },
     interact,
     enterZone,

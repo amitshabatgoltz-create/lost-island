@@ -10,7 +10,8 @@ export const LAYOUT = {
   crevice: { x: -31, z: -13 },
   blackSuitcase: { x: -30.2, z: -12.2 },
   signal: { x: 8, z: -178 },
-  base: { x: -25, z: 12, rot: 0.2 }, // player base camp (open side faces the sea)
+  base: { x: -25, z: 12, rot: 0.2 },
+  lobby: { x: 6, z: 29, yaw: 0.15 }, // main menu: where the chosen survivor stands // player base camp (open side faces the sea)
 };
 
 // Interactive items (positions tuned so every one is reachable on foot)

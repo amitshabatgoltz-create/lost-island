@@ -1,2 +1,5 @@
 node_modules
 dist
+tools/skins/fbx/
+tools/skins/tmp/
+_preview/

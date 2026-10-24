@@ -153,11 +153,6 @@ export async function build(env, api, onProgress = () => {}) {
       const sd = Math.abs(p.z - streamZ(p.x));
       return { sea: 0, forest: 1, stream: Math.max(0, 1 - sd / 26) };
     },
-    titleCamera(camera, t) {
-      const c = FL.transmitter;
-      camera.position.set(c.x + Math.sin(t) * 22, terrainHeight(c.x, c.z) + 9, c.z + Math.cos(t) * 22);
-      camera.lookAt(FL.mast.x, terrainHeight(c.x, c.z) + 8, FL.mast.z);
-    },
     setFarLights(n) { farOn = n; },
     setNewSignal(on) { newSignalOn = on; },
     sync(s) {

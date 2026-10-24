@@ -105,9 +105,10 @@ export async function build(env, api, onProgress = () => {}) {
       const d = inlandDist(p.x, p.z);
       return { sea: Math.max(0, 1 - d / 35), forest: Math.min(1, Math.max(0, (d - 25) / 40)), stream: 0 };
     },
-    titleCamera(camera, t) {
-      camera.position.set(-6 + Math.sin(t) * 30, 7 + Math.sin(t * 0.7) * 2, 34 + Math.cos(t) * 10);
-      camera.lookAt(8, 2, 0);
+    // main lobby: the survivor stands on the sand facing the sea; the camera looks back at the wreck and the jungle
+    lobby: {
+      x: LAYOUT.lobby.x, z: LAYOUT.lobby.z, yaw: LAYOUT.lobby.yaw,
+      cam: { dist: 5.2, side: 1.4, height: 1.25, lookSide: 1.3, lookY: 1.35 },
     },
     sync(s) {
       signal.setActive(s.questIndex >= 6);

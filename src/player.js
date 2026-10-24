@@ -1,9 +1,10 @@
-// Third-person survivor: rigged Mixamo character (public/models/survivor.glb) and its animation clips,
-// collision and orbit camera.
+// Third-person survivor: the chosen rigged Mixamo character (src/data/skins.js), the animation clips from
+// public/models/survivor.glb, collision and orbit camera.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { clothTex } from './gfx/textures.js';
+import { SKINS, DEFAULT_SKIN, skinById } from './data/skins.js';
 
 const tmpV = new THREE.Vector3();
 const MODEL_URL = './models/survivor.glb';
@@ -14,6 +15,15 @@ const HIPS = 'mixamorig10Hips';
 const ease = (k) => k * k * (3 - 2 * k);
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
 const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+
+let gltfLoader;
+function loadGLB(url, onProgress = () => {}) {
+  if (!gltfLoader) {
+    gltfLoader = new GLTFLoader();
+    gltfLoader.setMeshoptDecoder(MeshoptDecoder);
+  }
+  return gltfLoader.loadAsync(url, (e) => e.total && onProgress(e.loaded / e.total));
+}
 
 export class Player {
   constructor(scene, camera) {
@@ -55,40 +65,90 @@ export class Player {
     this.ray = new THREE.Raycaster();
   }
 
-  async load(onProgress = () => {}) {
-    const loader = new GLTFLoader();
-    loader.setMeshoptDecoder(MeshoptDecoder);
-    const gltf = await loader.loadAsync(MODEL_URL, (e) => e.total && onProgress(e.loaded / e.total));
-    const mesh = gltf.scene;
-    mesh.scale.setScalar(SCALE);
+  // survivor.glb carries the animation clips (shared by every skin) and the default character
+  async load(onProgress = () => {}, skinId = DEFAULT_SKIN) {
+    const gltf = await loadGLB(MODEL_URL, onProgress);
+    this.clips = gltf.animations;
+    this.baseHipsY = gltf.scene.getObjectByName(HIPS).position.y;
+    this.skins = { [SKINS[0].id]: Promise.resolve(this.prepareSkin(gltf.scene, SKINS[0])) };
+    this.yawDelta = { Walking_Turn_180: -3.12, Climbing_Down: -1.55, Start_Climbing_Ladder: 3.1 }; // body turn at the end of a clip
+    await this.setSkin(skinId);
+  }
+
+  // load (once) and get a skin ready to wear; resolves to its prepared record
+  loadSkin(id, onProgress) {
+    const skin = skinById(id);
+    if (!this.skins[skin.id]) {
+      this.skins[skin.id] = loadGLB('./models/' + skin.file, onProgress)
+        .then((g) => this.prepareSkin(g.scene, skin))
+        .catch((err) => { delete this.skins[skin.id]; throw err; });
+    }
+    return this.skins[skin.id];
+  }
+
+  // one-time setup of a loaded character: size, shadows, bandage, and the clips fitted to its skeleton
+  prepareSkin(mesh, skin) {
+    mesh.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(mesh);
+    const height = skin.height ?? (box.max.y - box.min.y) * SCALE;
+    mesh.scale.setScalar(height / (box.max.y - box.min.y));
     mesh.traverse((o) => {
       if (!o.isMesh) return;
+      if (skin.hide && skin.hide.includes(o.name)) o.visible = false;
       o.castShadow = true;
       o.receiveShadow = true;
       o.frustumCulled = false; // skinned bounds do not follow the animated pose (climbs move far from the bind pose)
       if (o.isSkinnedMesh) o.normalizeSkinWeights(); // 8-bit weights can sum to less than 1, which drags vertices to the origin
     });
-    this.model.root.add(mesh);
-    this.model.mesh = mesh;
-    this.hips = mesh.getObjectByName(HIPS);
-    this.head = mesh.getObjectByName('mixamorig10Head');
+    const hips = mesh.getObjectByName(HIPS);
+    // hips travel in the clips is in survivor.glb's units and leg length: scale it to this skeleton
+    const k = hips.position.y / this.baseHipsY;
+    const bones = new Set();
+    mesh.traverse((o) => o.isBone && bones.add(o.name));
+    const clips = this.clips.map((clip) => {
+      if (k === 1) return clip;
+      const tracks = clip.tracks.filter((t) => bones.has(t.name.split('.')[0])).map((t) => {
+        if (t.name !== `${HIPS}.position`) return t;
+        const c = t.clone();
+        for (let i = 0; i < c.values.length; i++) c.values[i] *= k;
+        return c;
+      });
+      return new THREE.AnimationClip(clip.name, clip.duration, tracks);
+    });
 
-    // field dressing on the right forearm (shown once the bandage is found); bone space is in centimetres
+    // field dressing on the right forearm (shown once the bandage is found); bone space is in the skin's own units
     const cloth = clothTex();
     const bandage = new THREE.Mesh(
       new THREE.CylinderGeometry(4.4, 4.0, 9, 14, 1, true),
       new THREE.MeshStandardMaterial({ color: 0xe9e3d3, map: cloth.map, normalMap: cloth.normalMap, roughness: 1, side: THREE.DoubleSide }),
     );
-    bandage.position.y = 13;
-    bandage.visible = this.bandageOn;
+    bandage.scale.setScalar(k);
+    bandage.position.y = 13 * k;
     bandage.castShadow = true;
     mesh.getObjectByName('mixamorig10RightForeArm').add(bandage);
-    this.model.bandage = bandage;
+    return { skin, mesh, clips, bandage, hips, head: mesh.getObjectByName('mixamorig10Head') };
+  }
+
+  // wear a skin: swaps the character mesh and rebuilds the animation mixer for its skeleton
+  async setSkin(id, onProgress) {
+    const rec = await this.loadSkin(id, onProgress);
+    if (this.model.mesh === rec.mesh) return rec.skin;
+    if (this.model.mesh) this.model.root.remove(this.model.mesh);
+    if (this.mixer) this.mixer.stopAllAction();
+    this.cancelAction();
+    const mesh = rec.mesh;
+    this.model.root.add(mesh);
+    this.model.mesh = mesh;
+    this.model.bandage = rec.bandage;
+    rec.bandage.visible = this.bandageOn;
+    this.hips = rec.hips;
+    this.head = rec.head;
+    this.skinId = rec.skin.id;
 
     this.mixer = new THREE.AnimationMixer(mesh);
     this.actions = {};
     this.hipsDelta = {}; // hips travel over each clip (bone-parent space): the clip's own root motion
-    for (const clip of gltf.animations) {
+    for (const clip of rec.clips) {
       const a = this.mixer.clipAction(clip);
       this.actions[clip.name] = a;
       const tr = clip.tracks.find((t) => t.name === `${HIPS}.position`);
@@ -101,7 +161,7 @@ export class Player {
       a.play();
       a.setEffectiveWeight(n === 'Idle' ? 1 : 0);
     }
-    this.yawDelta = { Walking_Turn_180: -3.12, Climbing_Down: -1.55, Start_Climbing_Ladder: 3.1 }; // body turn at the end of a clip
+    return rec.skin;
   }
 
   // the active zone supplies ground height, bounds, colliders and camera occluders
