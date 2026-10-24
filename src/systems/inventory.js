@@ -7,7 +7,7 @@ export const BAG_SLOTS = 6;
 
 export const CONTAINERS = {
   // future containers (crates at new research sites, a bigger chest after a base upgrade) go here
-  baseChest: { name: 'תיבת העץ', slots: 16, zone: 'beach' },
+  baseChest: { name: 'Wooden Chest', slots: 16, zone: 'beach' },
 };
 
 export function createContainer(slots) {

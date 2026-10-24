@@ -2,12 +2,12 @@
 // `desc` may be a function of the game state (entries that fill in as the player discovers more).
 import { CARVINGS, symbolName, SYMBOLS, WIRING_RULES } from './puzzles.js';
 
-const notchWord = (n) => ['', 'חריץ אחד', 'שני חריצים', 'שלושה חריצים'][n];
+const notchWord = (n) => ['', 'one notch', 'two notches', 'three notches'][n];
 export const BOOKLET_MESSAGE = 'If you are reading this, the plan went wrong.';
 export const FINAL_ENTRY = 'Someone is still here.';
 export const LOCKED_FUTURE_SLOTS = 2; // pages for Part 3
 
-const PHOTO_SVG = `<svg viewBox="0 0 300 200" class="clue-art" role="img" aria-label="תצלום: האי מהים ואדם במעיל גשם">
+const PHOTO_SVG = `<svg viewBox="0 0 300 200" class="clue-art" role="img" aria-label="Photo: the island from the sea and a person in a raincoat">
   <defs><filter id="grain"><feTurbulence baseFrequency="0.9" numOctaves="2" seed="4"/><feColorMatrix values="0 0 0 0 0.3  0 0 0 0 0.25  0 0 0 0 0.18  0 0 0 0.22 0"/><feComposite in2="SourceGraphic" operator="in"/></filter></defs>
   <rect x="6" y="6" width="288" height="188" fill="#c9b48e" stroke="#f1e8d4" stroke-width="10"/>
   <rect x="11" y="11" width="278" height="110" fill="#b39a72"/>
@@ -22,7 +22,7 @@ const PHOTO_SVG = `<svg viewBox="0 0 300 200" class="clue-art" role="img" aria-l
   <rect x="6" y="6" width="288" height="188" filter="url(#grain)" opacity="0.9"/>
 </svg>`;
 
-const CAMP_MAP_SVG = `<svg viewBox="0 0 300 220" class="clue-art" role="img" aria-label="מפה מצוירת ביד של היער">
+const CAMP_MAP_SVG = `<svg viewBox="0 0 300 220" class="clue-art" role="img" aria-label="Hand-drawn map of the forest">
   <rect x="4" y="4" width="292" height="212" rx="3" fill="#ddd0ae" stroke="#9a835f" stroke-width="2"/>
   <path d="M20 200 Q90 186 150 198 T282 192" fill="none" stroke="#5a4630" stroke-width="2" stroke-dasharray="5 4"/>
   <text x="200" y="212" font-size="10" fill="#5a4630" font-family="monospace">SHORE</text>
@@ -40,81 +40,81 @@ const CAMP_MAP_SVG = `<svg viewBox="0 0 300 220" class="clue-art" role="img" ari
 export const CLUES = [
   // ---------------- Part 1
   {
-    id: 'booklet', part: 1, title: 'החוברת',
-    desc: 'כריכת עור שחורה עם סמל שלא ראיתי מעולם: עיגול שבור, קו אנכי ושתי נקודות. בפנים — מפה חלקית של האי ושורה אחת בכתב יד.',
-    note: 'מי מחזיק מפה של אי שאף אחד לא אמור להכיר?',
+    id: 'booklet', part: 1, title: 'The Booklet',
+    desc: 'A black leather cover with a symbol I have never seen: a broken circle, a vertical line and two dots. Inside: a partial map of the island and one handwritten line.',
+    note: 'Who carries a map of an island nobody is supposed to know?',
   },
   {
-    id: 'ticket', part: 1, title: 'כרטיס טיסה קרוע',
-    desc: 'כרטיס עלייה למטוס, טיסה NV 2207, מושב 31A. החלק עם שם הנוסע נתלש.',
-    note: '31A זה המושב שלידי. הוא היה ריק כל הטיסה. מישהו הזמין אותו — ולא עלה.',
+    id: 'ticket', part: 1, title: 'Torn Boarding Pass',
+    desc: 'A boarding pass, flight NV 2207, seat 31A. The part with the passenger\'s name is torn off.',
+    note: '31A is the seat next to mine. It was empty the whole flight. Someone booked it and never boarded.',
   },
   {
-    id: 'device', part: 1, title: 'התקן זיכרון',
-    desc: 'התקן קטן עם אותו סמל חרוט עליו. נורית כחולה עדיין מהבהבת. על הצד מודבקת תווית: CACHE / TAIL.',
-    note: 'TAIL — הזנב. החלק האחורי של המטוס נפל ליד קצה היער.',
+    id: 'device', part: 1, title: 'Memory Device',
+    desc: 'A small device with the same symbol engraved on it. A blue light is still blinking. A label on the side says: CACHE / TAIL.',
+    note: 'TAIL: the tail. The back of the plane fell near the edge of the forest.',
   },
   {
-    id: 'document', part: 1, title: 'מסמך פנימי',
-    desc: 'דף מודפס בשרוול פלסטיק, נושא את הסמל. תאריך: 14 בספטמבר — תשעה ימים לפני הטיסה. נושא: NV 2207 / 23 SEP. “סטייה מהנתיב אושרה”. השאר מושחר.',
-    note: 'הם ידעו על הטיסה שלי תשעה ימים מראש. הם ידעו לאן היא תגיע.',
+    id: 'document', part: 1, title: 'Internal Document',
+    desc: 'A printed page in a plastic sleeve, carrying the symbol. Date: September 14, nine days before the flight. Subject: NV 2207 / 23 SEP. “Route deviation approved.” The rest is blacked out.',
+    note: 'They knew about my flight nine days ahead. They knew where it would end up.',
   },
   // ---------------- Part 2
   {
-    id: 'carvings', part: 2, title: 'סימנים חרוטים',
+    id: 'carvings', part: 2, title: 'Carved Symbols',
     desc: (s) => {
       const found = CARVINGS.filter((c) => s.flags[c.id]);
       const lines = found.map((c) => `${SYMBOLS.find((x) => x.id === c.symbol).svg.replace('<svg', '<svg class="glyph"')} ${symbolName(c.symbol)} — ${notchWord(c.notches)}`);
-      return 'סימנים שנחרטו בקליפת העצים, לאורך העקבות שיוצאות מהמשדר. מתחת לכל סימן — חריצים.<br><br>' +
-        (lines.length ? lines.join('<br>') : '') + (found.length < CARVINGS.length ? `<br><br><i>מצאתי ${found.length} מתוך ${CARVINGS.length}.</i>` : '');
+      return 'Symbols carved into tree bark along the tracks leading from the transmitter. Under each symbol: notches.<br><br>' +
+        (lines.length ? lines.join('<br>') : '') + (found.length < CARVINGS.length ? `<br><br><i>Found ${found.length} of ${CARVINGS.length}.</i>` : '');
     },
-    note: 'אותם סימנים יש על המנעול של ארגז האספקה. החריצים... אולי סדר?',
+    note: 'The same symbols are on the supply crate\'s lock. The notches... maybe an order?',
   },
   {
-    id: 'serviceCard', part: 2, title: 'כרטיס שירות — RELAY 04',
-    desc: 'כרטיס למינציה שהיה בארגז האספקה, ליד תא הכוח: “חיבור מחדש של לוח ההזנה. ארבעה מסופים, ממוספרים מלמעלה (1) למטה (4).”<br><br>' + WIRING_RULES.map((r, i) => `${i + 1}. ${r}`).join('<br>'),
-    note: 'שלושה משפטים בלבד. אם קוראים אותם נכון, אין יותר מדרך אחת.',
+    id: 'serviceCard', part: 2, title: 'Service Card: RELAY 04',
+    desc: 'A laminated card from the supply crate, next to the power cell: “Reconnecting the feed panel. Four terminals, numbered from top (1) to bottom (4).”<br><br>' + WIRING_RULES.map((r, i) => `${i + 1}. ${r}`).join('<br>'),
+    note: 'Only three sentences. Read them right and there is only one way.',
   },
   {
-    id: 'radioLog', part: 2, title: 'יומן רדיו פגום',
-    desc: 'כשהמשדר התעורר, הצג הדפיס את מה שנשאר מהיומן. רוב השורות מחוקות. נשארו: “יום 41 — הצוות עזב לפי הנוהל. נשאר צופה אחד.” · “יום 52 — אישור חלון 02:40. ממסר NIGHTJAR, תדר 417.9.” · “יום 53 — אין לענות לערוצים אזרחיים.”',
-    note: '417.9 — אותו מספר שחרוט על לוח המשדר. ו“צופה אחד”. מישהו נשאר כאן בכוונה.',
+    id: 'radioLog', part: 2, title: 'Damaged Radio Log',
+    desc: 'When the transmitter woke up, the display printed what was left of its log. Most lines are erased. What remains: “Day 41 — crew left per protocol. One observer remains.” · “Day 52 — window confirmed 02:40. Relay NIGHTJAR, frequency 417.9.” · “Day 53 — do not answer civilian channels.”',
+    note: '417.9, the same number engraved on the transmitter panel. And “one observer”. Someone stayed here on purpose.',
   },
   {
-    id: 'photo', part: 2, title: 'תצלום',
-    desc: 'תצלום דהוי, צולם מהים: האי, תורן המשדר, ובחזית אדם במעיל גשם כהה שעומד עם הגב למצלמה. בגב התצלום, בעט: “N. — השבוע הראשון. הכל לפי התוכנית.”',
-    note: 'הוא עמד ליד התורן שבו אני עמדתי לפני שעה. אין פנים, רק אות אחת.',
+    id: 'photo', part: 2, title: 'Photograph',
+    desc: 'A faded photo taken from the sea: the island, the transmitter mast, and in front a person in a dark raincoat with their back to the camera. On the back, in pen: “N. — first week. All according to plan.”',
+    note: 'They stood by the mast where I stood an hour ago. No face, just one letter.',
     art: PHOTO_SVG,
   },
   {
-    id: 'campMap', part: 2, title: 'מפה מצוירת ביד',
-    desc: 'מפה שהייתה נעוצה בקיר הבקתה. מסומנים בה המחנה, הממסר והרכס המזרחי. בקצה הדרומי, על קו החוף: X אדום והכיתוב LZ-2.',
-    note: 'LZ-2 הוא בדיוק המקום שבו המטוס נפל. הנייר מצהיב — המפה הזאת צוירה לפני שבועות.',
+    id: 'campMap', part: 2, title: 'Hand-drawn Map',
+    desc: 'A map pinned to the wall of the hut. It marks the camp, the relay and the east ridge. At the south end, on the shoreline: a red X and the words LZ-2.',
+    note: 'LZ-2 is exactly where the plane went down. The paper is yellowed: this map was drawn weeks ago.',
     art: CAMP_MAP_SVG,
   },
   {
-    id: 'calendar', part: 2, title: 'לוח שנה מהבקתה',
-    desc: 'לוח שנה תלוי על הקיר בבקתה, פתוח על ספטמבר. שני ימים מוקפים באדום: 14 — ולידו “APPROVED”. 23 — ולידו “ARRIVAL · LZ-2”.',
-    note: '23 בספטמבר הוא היום שבו נפלנו. ו־14... התאריך של המסמך הפנימי מהחוף.',
+    id: 'calendar', part: 2, title: 'Calendar from the Hut',
+    desc: 'A calendar on the hut wall, open to September. Two days are circled in red: 14, with “APPROVED” next to it. 23, with “ARRIVAL · LZ-2”.',
+    note: 'September 23 is the day we crashed. And 14... the date on the internal document from the beach.',
   },
   {
-    id: 'researchDoc', part: 2, title: 'פרוטוקול מחקר',
-    desc: 'PROJECT NIGHTJAR — פרוטוקול שלב 3. תאריך: 2 באוגוסט, שבעה שבועות לפני הטיסה. “מטרת השלב: תיעוד התנהגות של נבדקים בבידוד מלא, ללא ידיעתם. אופן הכניסה: ירידה לא מתוכננת. מספר שורדים צפוי: נמוך. אין ליצור מגע.”',
-    note: 'נבדקים. “ירידה לא מתוכננת”. הם קוראים להתרסקות כניסה. האי הזה הוא מעבדה.',
+    id: 'researchDoc', part: 2, title: 'Research Protocol',
+    desc: 'PROJECT NIGHTJAR — Phase 3 protocol. Date: August 2, seven weeks before the flight. “Phase goal: record the behavior of subjects in full isolation, without their knowledge. Method of entry: unplanned descent. Expected survivors: low. Do not make contact.”',
+    note: 'Subjects. “Unplanned descent.” They call the crash an entry. This island is a lab.',
   },
   {
-    id: 'schedule', part: 2, title: 'לוח משמרות תצפית',
-    desc: 'דף משמרות מלוכלך בבוץ: “צופה — הרכס המזרחי. משמרת לילה. לדווח על כל תנועה ב-LZ-2.” השורה האחרונה בכתב יד: “23/9 · 02:41 — יש מגע.”',
-    note: '02:41. דקה אחרי שנפלנו. מישהו ישב על הרכס וחיכה לנו.',
+    id: 'schedule', part: 2, title: 'Lookout Shift Schedule',
+    desc: 'A muddy shift sheet: “Observer — east ridge. Night shift. Report any movement at LZ-2.” The last line, handwritten: “23/9 · 02:41 — contact.”',
+    note: '02:41. One minute after we crashed. Someone sat on the ridge waiting for us.',
   },
   {
-    id: 'routeChart', part: 2, title: 'תרשים נתיב הטיסה',
-    desc: 'תרשים מודפס של נתיב NV 2207, עם חותמת תאריך מלפני ההמראה. מעל הנתיב המקורי מישהו שרטט בעיפרון קו שני שסוטה דרומה, אל האי. ליד הסטייה: “02:14 — מערכות. 02:40 — ירידה.” בשוליים: “31A — מלווה. לא לעלות.”',
-    note: 'הם ידעו את הנתיב לפני שהמטוס המריא. והמושב הריק שלידי — מישהו קנה אותו כדי שיישאר ריק.',
+    id: 'routeChart', part: 2, title: 'Flight Route Chart',
+    desc: 'A printed chart of the NV 2207 route, date-stamped before takeoff. Over the original route someone drew a second line in pencil that turns south, to the island. Next to the turn: “02:14 — systems. 02:40 — descent.” In the margin: “31A — escort. Do not board.”',
+    note: 'They knew the route before the plane took off. And the empty seat next to me: someone bought it so it would stay empty.',
   },
   {
-    id: 'stillHere', part: 2, title: 'רשומה אחרונה',
-    desc: 'אחרי השידור, האורות ביער נדלקו אחד אחרי השני, והאות האדום עבר למקום אחר. כתבתי בחוברת את מה שאני כבר לא יכול להכחיש:',
+    id: 'stillHere', part: 2, title: 'Last Entry',
+    desc: 'After the broadcast, the lights in the forest came on one after another, and the red signal moved somewhere else. I wrote in the booklet what I can no longer deny:',
     note: 'Someone is still here.',
     noteEn: true,
   },

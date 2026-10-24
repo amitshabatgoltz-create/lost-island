@@ -59,9 +59,9 @@ export class Lobby {
     $('btn-skin').addEventListener('click', () => { this.hooks.click(); this.openSelect(false); });
     window.addEventListener('keydown', (e) => {
       if (!this.active || this.view !== 'select' || e.repeat) return;
-      // the layout is right-to-left: the right arrow goes back, the left arrow goes forward
-      if (e.code === 'ArrowRight') this.choose(this.sel - 1);
-      else if (e.code === 'ArrowLeft') this.choose(this.sel + 1);
+      // left arrow goes back, right arrow goes forward
+      if (e.code === 'ArrowLeft') this.choose(this.sel - 1);
+      else if (e.code === 'ArrowRight') this.choose(this.sel + 1);
       else if (e.code === 'Enter') this.confirm();
       else if (e.code === 'Escape' && !this.first) this.cancel();
     });
@@ -125,7 +125,7 @@ export class Lobby {
     this.view = 'select';
     this.spin = 0;
     this.spinVel = 0;
-    $('select-kicker').textContent = first ? 'לפני שממריאים' : 'החלפת דמות';
+    $('select-kicker').textContent = first ? 'Before takeoff' : 'Change character';
     this.ui.show('sel-back', !first);
     this.ui.show('title', false);
     this.ui.show('select', true);
@@ -165,7 +165,7 @@ export class Lobby {
       this.player.showBandage(false);
     } catch (err) {
       console.error(err);
-      if (token === this.loadToken) this.ui.toast('לא הצלחתי לטעון את הדמות. נסה שוב.', 'warn', 3);
+      if (token === this.loadToken) this.ui.toast('Could not load the character. Try again.', 'warn', 3);
     } finally {
       card && card.classList.remove('loading');
       if (token === this.loadToken) $('sel-confirm').disabled = false;

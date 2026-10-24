@@ -94,25 +94,25 @@ export function buildClimbs(ctx, L, logs) {
       {
         id: 'lookoutUp', kind: 'examine', x: upFrom.x, z: upFrom.z, radius: 1.6,
         available: () => !onTop(),
-        label: () => 'טפס על הסלע',
+        label: () => 'Climb the rock',
         use: () => p().climb('Climbing_1', upFrom, { ...upTo, y: top }, yawZ, {
           onDone: () => {
             if (sawView) return;
             sawView = true;
-            api.thought('מכאן רואים מעל השיחים. מזרחה — הרכס, ועליו משהו מכוסה ברשת הסוואה.', 4.5);
+            api.thought('From here you can see over the bushes. To the east, the ridge, and on it something under a camouflage net.', 4.5);
           },
         }),
       },
       {
         id: 'lookoutDown', kind: 'examine', x: downFrom.x, z: downFrom.z, radius: 1.4,
         available: () => onTop(),
-        label: () => 'רד מהסלע',
+        label: () => 'Climb down',
         use: () => p().climb('Climbing_Down', { ...downFrom, y: top }, downTo, yawX),
       },
       {
         id: 'lookoutStep', kind: 'examine', x: stepFrom.x, z: stepFrom.z, radius: 1.3,
         available: () => p().pos.y < stepTop - 0.4,
-        label: () => 'טפס על האבן',
+        label: () => 'Climb the boulder',
         use: () => p().climb('Start_Climbing_Ladder', stepFrom, { ...stepTo, y: stepTop }, yawZ + Math.PI),
       },
     ];
@@ -125,7 +125,7 @@ export function buildClimbs(ctx, L, logs) {
         list.push({
           id: `log${i}${side > 0 ? 'a' : 'b'}`, kind: 'examine', x: a.x, z: a.z, radius: 1.2,
           available: () => true,
-          label: () => 'טפס מעל הגזע',
+          label: () => 'Climb over the log',
           use: () => p().climb('Climbing', a, b, Math.atan2(b.x - a.x, b.z - a.z), { timeScale: 1.25 }),
         });
       }
