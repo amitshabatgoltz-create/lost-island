@@ -63,11 +63,12 @@ const START = {
 // clips whose forward travel moves the player (the hips travel is taken back out), by how they end
 const DRIVE = { Start_Walking: 'start', Torch_Start_Walking: 'start', Idle_To_Running: 'run', Stop_Walking: 'stop', Jump: 'jump', Running_Jump: 'jump', Forward_Jump: 'jump', Fall_Land: 'land' };
 // Space: [clip, options] — with the flashlight out its two-handed Jump, otherwise a running leap on the move
-// (Jump 1) or a standing jump forward (Forward Jump)
+// (Jump 1) or a standing jump forward (Forward Jump). `free` is the clip time where the feet are back on the
+// ground: from there the player can move again, and moving blends straight out of the rest of the clip
 const JUMPS = {
-  torch: ['Jump', { timeScale: 1.2, from: 1.05, to: 2.45 }],
-  moving: ['Running_Jump', { timeScale: 1.25, from: 0.05 }],
-  standing: ['Forward_Jump', { timeScale: 1.3, from: 0.3 }],
+  torch: ['Jump', { timeScale: 1.2, from: 1.05, to: 2.45, free: 2.0 }],
+  moving: ['Running_Jump', { timeScale: 1.25, from: 0.05, free: 0.6 }],
+  standing: ['Forward_Jump', { timeScale: 1.3, from: 0.3, free: 1.25 }],
 };
 // falling off a drop: the ground falling away faster than this (m per m of travel, and m per frame) starts a fall
 const FALL_SLOPE = 2, FALL_STEP = 0.2;
@@ -424,6 +425,7 @@ export class Player {
       name, action: a, from, to, reverse: !!opts.reverse, loop: !!opts.loop, lock: !!opts.lock,
       w: opts.fadeIn === 0 ? 1 : 0, fadeIn: opts.fadeIn ?? 0.2, fadeOut: opts.fadeOut ?? 0.25,
       root: opts.root || null, turn: opts.turn || 0, holdFacing: !!opts.holdFacing, onDone: opts.onDone, ending: false, p: 0,
+      free: opts.free ?? null,
     };
   }
 
@@ -493,7 +495,7 @@ export class Player {
     this.pos.y = gh;
     this.air = null;
     if (a.y0 - gh > FALL_LAND && this.drives.Fall_Land) {
-      this.play('Fall_Land', { from: 0.25, lock: true, fadeIn: 0.08, fadeOut: 0.3 });
+      this.play('Fall_Land', { from: 0.25, free: 0.85, lock: true, fadeIn: 0.08, fadeOut: 0.3 });
     } else if (this.act && this.act.name === 'Falling') this.act.ending = true;
     this.still = this.speed < 0.2;
   }
@@ -576,6 +578,11 @@ export class Player {
       if (drive.kind === 'start' && (!moving || running || this.busy)) dr.ending = true;
       else if (drive.kind === 'run' && (!moving || !running || this.busy)) dr.ending = true;
       else if (drive.kind === 'stop' && (moving || this.busy)) dr.ending = true;
+      // landed from a jump (or a fall): the controls are back, and walking off cuts the recovery short
+      else if (dr.free !== null && dr.action.time >= dr.free && (dr.lock || moving)) {
+        dr.lock = false;
+        if (moving) { dr.ending = true; dr.fadeOut = 0.15; }
+      }
       else if ((drive.kind === 'start' || drive.kind === 'run') && dr.action.time >= dr.to - 0.02) {
         dr.ending = true;
         this.actions[drive.kind === 'start' ? 'Walking' : 'Running'].time = drive.phase;
