@@ -39,13 +39,14 @@ https://github.com/amitshabatgoltz-create/lost-island/releases/latest
 
 הקובץ נבנה אוטומטית ב-GitHub Actions (`.github/workflows/desktop.yml`) בכל עדכון של `main`. הקוד של האפליקציה נמצא ב-`desktop/` (Electron). להרצה מקומית: `npm run build`, להעתיק את `dist` אל `desktop/app`, ואז בתוך `desktop/` להריץ `npm install`, `npx install-electron` ו-`npm start`.
 
-## גרסה ל-Poki
+## גרסאות ל-Poki ול-CrazyGames
 
-`npm run build:poki` בונה את המשחק עם ה-SDK של Poki לתיקייה `dist-poki`. בכל עדכון של `main` נבנה אוטומטית
-`LOST-poki.zip` בדף https://github.com/amitshabatgoltz-create/lost-island/releases/tag/poki-latest (`.github/workflows/poki.yml`),
-ואותו מעלים ב-developers.poki.com.
+`npm run build:poki` בונה את המשחק עם ה-SDK של Poki לתיקייה `dist-poki`, ו-`npm run build:crazygames` בונה אותו עם ה-SDK של CrazyGames לתיקייה `dist-crazygames`.
+בכל עדכון של `main` נבנים אוטומטית (`.github/workflows/portals.yml`):
+- `LOST-poki.zip` בדף https://github.com/amitshabatgoltz-create/lost-island/releases/tag/poki-latest (מעלים ב-developers.poki.com)
+- `LOST-crazygames.zip` בדף https://github.com/amitshabatgoltz-create/lost-island/releases/tag/crazygames-latest (מעלים ב-developer.crazygames.com)
 
-- `src/poki.js` מדבר עם ה-SDK: מודיע מתי הטעינה נגמרה, מתי משחקים ומתי לא (לובי, הפסקה, סוף פרק), ומציג פרסומת קצרה רק ברגעים טבעיים: כשלוחצים "שחק" בלובי וכשממשיכים לחלק 2. בזמן הפרסומת הצליל מושתק.
+- `src/portal.js` מדבר עם ה-SDK של האתר: מודיע מתי הטעינה נגמרה, מתי משחקים ומתי לא (לובי, הפסקה, סוף פרק), ומציג פרסומת קצרה רק ברגעים טבעיים: כשלוחצים "Play" בלובי וכשממשיכים לחלק הבא. בזמן הפרסומת הצליל מושתק.
 - בכל גרסה אחרת (האתר, המחשב) אין SDK, וכל הקריאות האלה לא עושות כלום.
 - הגופנים ארוזים בתוך המשחק (`@fontsource`) ולא נטענים מגוגל, כדי שהמשחק לא יפנה לאתרים אחרים.
 

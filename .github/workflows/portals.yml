@@ -1,0 +1,49 @@
+name: Build game portal versions
+
+# Builds the game with the Poki SDK and with the CrazyGames SDK, and puts LOST-poki.zip and
+# LOST-crazygames.zip on their release pages. Those zips are what gets uploaded to each portal.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: portals
+  cancel-in-progress: true
+
+jobs:
+  poki:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build:poki
+      - run: npm run build:crazygames
+      # index.html must sit at the top of each zip, not inside a folder
+      - run: |
+          (cd dist-poki && zip -r ../LOST-poki.zip .)
+          (cd dist-crazygames && zip -r ../LOST-crazygames.zip .)
+          ls -l LOST-*.zip
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete poki-latest --cleanup-tag --yes || true
+          gh release create poki-latest LOST-poki.zip \
+            --target "$GITHUB_SHA" \
+            --title "LOST for Poki" \
+            --latest=false \
+            --notes "Upload **LOST-poki.zip** on developers.poki.com (don't unzip it). It is the web game with the Poki SDK built in."
+          gh release delete crazygames-latest --cleanup-tag --yes || true
+          gh release create crazygames-latest LOST-crazygames.zip \
+            --target "$GITHUB_SHA" \
+            --title "LOST for CrazyGames" \
+            --latest=false \
+            --notes "Upload **LOST-crazygames.zip** on developer.crazygames.com (don't unzip it). It is the web game with the CrazyGames SDK built in."
