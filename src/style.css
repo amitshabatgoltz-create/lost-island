@@ -480,3 +480,21 @@ button { font-family: inherit; }
   .toast { white-space: normal; max-width: 86vw; text-align: center; }
 }
 
+
+/* ---------------------------------------------------------------- Part 3: documents and facility screens */
+#device.doc .device-panel, #device.term .device-panel { width: min(620px, 100%); }
+.doc-paper { padding: 18px 20px; border-radius: 3px; background: #ece5d2; color: #231d14; font-family: 'Courier New', monospace; font-size: 15px; line-height: 1.65; box-shadow: inset 0 0 40px rgba(120, 95, 50, 0.25); }
+.crt { padding: 16px 18px; border-radius: 6px; background: #06110b; color: #8ef0b0; font-family: 'Courier New', monospace; font-size: 15px; line-height: 1.6; box-shadow: inset 0 0 30px rgba(60, 255, 140, 0.12); text-shadow: 0 0 4px rgba(110, 255, 160, 0.35); }
+.crt h4 { margin: 0 0 8px; font-size: 15px; letter-spacing: 0.08em; color: #c8ffd9; }
+.crt .dim { color: #4f9a6b; }
+.crt .warn { color: #ffb347; }
+.crt .alert { color: #ff7a6a; }
+.crt table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.crt td { padding: 2px 6px 2px 0; vertical-align: top; }
+.crt .btn { font-family: inherit; }
+.crt .bar { height: 8px; margin: 10px 0 6px; border: 1px solid #3c7a52; }
+.crt .bar i { display: block; height: 100%; width: 0; background: #8ef0b0; transition: width 0.25s linear; }
+.crt .lines { min-height: 120px; }
+.crt .lines p { margin: 0 0 6px; }
+.end-protocol { display: inline-block; margin-top: 10px; font-family: 'Courier New', monospace; font-size: 14px; letter-spacing: 0.12em; color: #ff8a6a; }
+#keypad-display.long { font-size: 24px; letter-spacing: 0.12em; }

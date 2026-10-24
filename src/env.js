@@ -17,6 +17,11 @@ const PRESETS = {
     fog: 0x1a2738, fogDensity: 0.012, sky: false, hemiSky: 0x6a86bc, hemiGround: 0x22222a, hemi: 0.95,
     light: 0xa6bff0, lightI: 1.45, dir: MOON_DIR, envI: 0.25, exposure: 1.3, moon: true,
   },
+  // inside the mountain (Part 3): no sky, no sun; practical lights, emergency lights and the flashlight do the work
+  indoor: {
+    fog: 0x07090b, fogDensity: 0.035, sky: false, hemiSky: 0x7f8c99, hemiGround: 0x2a2620, hemi: 0.32,
+    light: 0x000000, lightI: 0, dir: MOON_DIR, envI: 0.12, exposure: 1.25, moon: false,
+  },
 };
 
 // Height fog: exponential fog that is thicker near the ground and thins out with altitude, so distant
@@ -135,7 +140,7 @@ export function createEnvironment(renderer) {
 
   return {
     scene, sky, sun, hemi, shared,
-    get mode() { return preset === PRESETS.night ? 'night' : 'day'; },
+    get mode() { return preset === PRESETS.night ? 'night' : preset === PRESETS.indoor ? 'indoor' : 'day'; },
     // zone can override fog density (dense in the forest)
     setTime(mode, { fogDensity } = {}) {
       preset = PRESETS[mode] || PRESETS.day;
@@ -151,6 +156,7 @@ export function createEnvironment(renderer) {
       sun.intensity = preset.lightI;
       scene.environmentIntensity = preset.envI;
       renderer.toneMappingExposure = preset.exposure;
+      sun.visible = preset.lightI > 0; // no sun shadow pass inside the mountain
     },
     setShadows(on) { sun.castShadow = on; },
     // shadow map resolution per quality setting (the 80 m shadow area is kept tight around the view)

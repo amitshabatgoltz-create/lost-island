@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { fbm, mulberry32, smoothstep } from '../../noise.js';
 import { heightAt as terrainHeight, streamZ, streamLevel, distToPaths } from './terrain.js';
-import { FL, FLOGS, PRINTS, CLEARINGS, BOUNDS } from './layout.js';
+import { FL, FLOGS, PRINTS, CLEARINGS, BOUNDS, NORTH_EXIT } from './layout.js';
 import { buildClimbs } from './climbs.js';
 import {
   palmGeometries, jungleTreeGeometries, bushGeometry, fernGeometry, grassGeometry, softSprite,
@@ -142,11 +142,17 @@ export async function build(env, api, onProgress = () => {}) {
     fogDensity: () => 0.022,
     spawns: {
       fromBeach: { x: FL.entry.x, z: FL.entry.z, yaw: Math.PI },
+      fromRidge: { x: NORTH_EXIT.x, z: NORTH_EXIT.z + 4, yaw: 0 },
     },
     exits: [{
       to: 'beach', spawn: 'fromForest',
       when: () => true,
       test: (x, z) => z > 101.5 && Math.abs(x) < 9,
+    }, {
+      // Part 3: the trail north-east of the camp leaves the forest once the signal has moved
+      to: 'ridge', spawn: 'fromForest',
+      when: (s) => !!s.flags.endingSeen,
+      test: (x, z) => z < NORTH_EXIT.z && Math.abs(x - NORTH_EXIT.x) < NORTH_EXIT.hw,
     }],
     trailhead: { x: 0, z: 101 },
     ambience(p) {

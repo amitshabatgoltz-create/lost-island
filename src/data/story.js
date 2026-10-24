@@ -8,7 +8,9 @@ const when = (cond, text) => (cond ? [text] : []);
 
 // one short sentence for the whole current chapter of the story
 export function mainGoal(s) {
-  if (s.questIndex >= 15) return 'Someone knows you survived. The story continues in Part 3.';
+  if (s.questIndex >= 26) return 'Someone has been watching, and NIGHTJAR Phase 3 has begun. The story continues in Part 4.';
+  if (s.questIndex >= 19) return 'Find out what NIGHTJAR watched from inside the mountain, and what “OBSERVER” means.';
+  if (s.questIndex >= 15) return 'The signal moved north. Someone is still here. Follow it and find out who.';
   if (s.questIndex >= 7) return 'The red signal may lead to someone who knows what happened. Find its source.';
   if (s.questIndex >= 6 || f(s, 'revealSeen')) return 'Someone knew about the crash before it happened. Find out who knew, and why.';
   return 'You survived the crash. Find supplies and figure out where you are.';
@@ -171,14 +173,133 @@ export const QUEST_INFO = {
     objective: () => 'Go back to the transmitter and listen to the broadcast.',
     why: 'This is the first time someone is speaking to me directly.',
   },
-  part3: {
+  // ------------------------------------------------------------------ Part 3
+  north: {
     know: () => [
       '“We know you survived. Do not trust anyone coming to the island.”',
-      'The red signal moved somewhere else, and lights came on deep in the forest.',
+      'The red signal moved north-east, and lights came on deep in the forest.',
+      'The figure from the ridge got away.',
     ],
-    question: 'Who is still here?',
-    objective: () => 'Part 3, coming soon.',
-    why: 'Someone knows I am alive.',
+    question: 'Who switched the lights on, and where is the signal now?',
+    objective: () => 'Follow the northbound signal out of the forest.',
+    why: 'Someone is still here. The signal is the only lead to them.',
+  },
+  search: {
+    know: (s) => [
+      'The trail climbs a narrow valley toward a mountain. The red light blinks on top of the cliff.',
+      ...when(s.flags.cableSeen, 'A thick black cable runs along the trail, northward.'),
+      ...when(s.collected.includes('fieldRecorder'), 'A field recorder: “The north door still takes the old badges.”'),
+      ...when(s.flags.cameraSeen, 'A NIGHTJAR camera on a pole, pointed at the trail.'),
+      ...when(s.collected.includes('mapFragment'), 'The missing piece of my booklet map marks “N-1” in the cliff.'),
+    ],
+    question: 'Where does the trail, and the cable, lead?',
+    objective: () => 'Search the northern ridge. Follow the trail, the cable and the prints.',
+    why: 'Whoever left the prints walked here tonight.',
+  },
+  restore: {
+    know: (s) => {
+      const f = s.flags;
+      return [
+        'A steel door is set into the cliff, marked NIGHTJAR N-1. Its access panel is dead.',
+        'The panel label: “FEED: GEN-2”.',
+        ...when(f.genSeen, 'The generator shed: GEN-2 has an empty main fuse holder.'),
+        ...when(f.junctionSeen, 'A junction box between the shed and the door has four loose wires.'),
+        ...when(s.collected.includes('fuse') || f.fuseInstalled, 'I found a spare main fuse in a NIGHTJAR crate.'),
+        ...when(f.fuseInstalled, 'The fuse is in place.'),
+        ...when(f.junctionWired, 'The junction box is wired.'),
+      ];
+    },
+    question: 'How do I get power back to the door?',
+    objective: (s) => {
+      const f = s.flags;
+      if (!f.fuseInstalled) return s.collected.includes('fuse') ? 'Put the main fuse into the generator.' : 'Find a main fuse for the generator.';
+      if (!f.junctionWired) return 'Reconnect the wires in the junction box.';
+      return 'Start the generator.';
+    },
+    why: 'Without power the door will not open.',
+  },
+  door: {
+    know: (s) => [
+      'The access panel is on: “SWIPE BADGE · LEVEL 2”.',
+      ...when(s.collected.includes('badge'), 'I have a NIGHTJAR Level 2 badge from the trail.'),
+    ],
+    question: 'Will the door still open after all this time?',
+    objective: (s) => (s.collected.includes('badge') ? 'Swipe the badge at the access panel.' : 'Find a NIGHTJAR access badge.'),
+    why: 'Whatever NIGHTJAR hid in this mountain is behind that door.',
+  },
+  enter: {
+    know: () => ['The door is open. A corridor goes down into the mountain.', 'Dim emergency lights. Cold air.'],
+    question: 'What is inside N-1?',
+    objective: () => 'Go inside.',
+    why: 'This is where the signal led me.',
+  },
+  observe: {
+    know: (s) => [
+      'N-1 is an observation facility, abandoned in a hurry.',
+      ...when(s.collected.includes('memo'), 'The memo: “anomalous conditions” block communications and tracking.'),
+      ...when(!!s.flags.monitorsSeen, 'The monitor wall still shows the island: the beach, the camp, the trail.'),
+      ...when(s.collected.includes('fieldNote'), 'N.\'s note: “Do not trust a transmission simply because it uses a familiar voice.”'),
+      ...when(s.collected.includes('passengerReport'), 'The passengers were classified before departure. Seat 31A is restricted.'),
+    ],
+    question: 'What did they watch from here, and who were they watching?',
+    objective: () => 'Search the checkpoint and the observation room.',
+    why: 'The records here may explain why the flight was sent to the island.',
+  },
+  archive: {
+    know: (s) => [
+      'Passenger report: “Seat 31A: classification restricted. See restricted archive.”',
+      'Passenger report: “Observation window opened: 02:40.”',
+      ...when(s.collected.includes('discrepancies'), 'People listed as “transferred” are missing, with arrival dates that make no sense.'),
+      ...when(!!s.flags.archiveTried, 'The archive terminal wants a WINDOW CODE: DDHHMM.'),
+    ],
+    question: 'What is in the restricted record of seat 31A?',
+    objective: (s) => (s.collected.includes('discrepancies') ? 'Unlock the archive terminal.' : 'Search the records archive.'),
+    why: '31A is the empty seat next to mine. Someone booked it and never boarded.',
+  },
+  file31a: {
+    know: () => ['The archive terminal accepted the code and released a restricted cabinet.'],
+    question: 'What does the file say about 31A?',
+    objective: () => 'Take the file from the restricted cabinet.',
+    why: 'The answer about the empty seat should be inside.',
+  },
+  recording: {
+    know: (s) => [
+      'File 31A: classification OBSERVER. Status: unresolved.',
+      '“Additional records have been transferred to the restricted archive.”',
+      ...when(!!s.flags.recordingPart1, 'The recording cut off. The deck reports data on a SECONDARY INPUT.'),
+    ],
+    question: 'What is on the restricted recording?',
+    objective: (s) => (s.flags.recordingPart1 ? 'Recover the rest of the recording.' : 'Find the playback deck in the control room and play the recording.'),
+    why: 'It may be the only record of what OBSERVER means.',
+  },
+  blackout: {
+    know: () => [
+      'The recording: “If the subject reaches the facility, do not initiate direct contact.”',
+      'The rest: “The subject\'s arrival at N-1 is anticipated.”',
+      'Then the power failed. Only emergency lights are on.',
+    ],
+    question: 'Why did one screen turn on by itself?',
+    objective: () => 'Check the backup monitor that came on.',
+    why: 'Something in this facility is still running.',
+  },
+  final: {
+    know: () => [
+      'The backup monitor shows the observation room live. It shows me.',
+      'Someone, somewhere, is watching this room right now.',
+    ],
+    question: 'Who is watching, and what did they record?',
+    objective: () => 'Activate the final monitor.',
+    why: 'A new recording was detected, and it is meant for me.',
+  },
+  part4: {
+    know: () => [
+      '“If you can hear this, they\'ve already found you.”',
+      'Something is behind the sealed door to the lower level.',
+      'NIGHTJAR PROTOCOL — PHASE 3 ACTIVATED.',
+    ],
+    question: 'Who is OBSERVER, and what is Phase 3?',
+    objective: () => 'Part 4, coming soon.',
+    why: 'Someone has been watching.',
   },
 };
 
@@ -198,4 +319,13 @@ export const CLUE_LEARNED = {
   schedule: 'Someone watched from the east ridge at the moment of the crash.',
   routeChart: 'They knew the flight path before takeoff.',
   stillHere: 'Someone is still here.',
+  fieldRecorder: 'The door takes old badges, and the generator needs a fuse.',
+  mapFragment: 'The torn-off part of the booklet map leads to “N-1”.',
+  memo: 'The island interferes with communications and tracking. Nobody outside can find it.',
+  passengerReport: 'The passengers were classified before the flight. Seat 31A is restricted.',
+  fieldNote: 'N. warns: a familiar voice is not proof of anything.',
+  discrepancies: 'People are missing, and their dates do not add up.',
+  file31a: 'Seat 31A was classified as OBSERVER.',
+  recording: 'NIGHTJAR expected me to reach this facility.',
+  phase3: 'Someone has been watching.',
 };

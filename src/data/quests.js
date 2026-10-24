@@ -2,6 +2,8 @@
 // Indices 0–5 are Part 1 and must keep their order (saved games store questIndex).
 import { LAYOUT, ITEM_SPOTS } from '../zones/beach/layout.js';
 import { FL } from '../zones/forest/layout.js';
+import { RL } from '../zones/ridge/layout.js';
+import { FX } from '../zones/facility/layout.js';
 
 const has = (s, id) => s.collected.includes(id);
 const at = (zone, p) => ({ zone, x: p.x, z: p.z });
@@ -160,14 +162,152 @@ export const QUESTS = [
     target: () => at('forest', FL.transmitter),
   },
 
-  // ============================== PART 3 (teaser)
+  // ============================== PART 3 — THE OBSERVER
+  // Index 15 used to be the Part 3 teaser: saves that finished Part 2 continue here.
   {
-    id: 'part3', part: 3, title: 'Lights in the Forest', en: 'Someone is still here.',
-    objective: 'Part 3, coming soon', final: true,
+    id: 'north', part: 3, title: 'Follow the Signal', en: 'The signal has moved north.',
+    objective: 'Follow the northbound signal',
+    done: (s) => !!s.flags.reachedRidge,
+    target: () => ({ zone: 'forest', x: 42, z: -96 }),
+    start: { thought: 'The red light moved north-east. And the lights deep in the forest... someone switched them on for me.', delay: 1.5 },
+    hints: [
+      'Look for the red light above the trees, to the north-east. The lights that came on point the same way.',
+      'A new trail leaves the camp toward the north-east, past the hut.',
+      'From the camp, follow the trail north-east to the edge of the forest. It climbs out of the trees toward the mountain.',
+    ],
+  },
+  {
+    id: 'search', part: 3, title: 'The Northern Ridge', objective: 'Someone came this way. Where does the trail lead?',
+    done: (s) => !!s.flags.entranceFound,
+    target: () => at('ridge', RL.door),
+    hints: [
+      'The black cable along the trail goes somewhere. So do the fresh boot prints.',
+      'The trail climbs north up the valley, toward the cliff under the red light.',
+      'Follow the cable and the prints all the way to the foot of the cliff. Something is built into the rock.',
+    ],
+  },
+  {
+    id: 'restore', part: 3, title: 'Restore Power', objective: 'The door is dead. Where does its power come from?',
+    sub: (s) => [
+      { label: 'Main fuse in the generator', done: !!s.flags.fuseInstalled },
+      { label: 'Junction box wired', done: !!s.flags.junctionWired },
+      { label: 'Generator running', done: !!s.flags.genRunning },
+    ],
+    done: (s) => !!s.flags.genRunning && !!s.flags.junctionWired,
+    target: (s, pos) => nearest('ridge', [
+      !s.flags.fuseInstalled && !s.collected.includes('fuse') && RL.crate,
+      !s.flags.genRunning && RL.generator,
+      !s.flags.junctionWired && RL.junction,
+    ].filter(Boolean), pos),
+    hints: [
+      'The panel by the door says where its power comes from. Follow the cable from the panel.',
+      'The feed cable runs to a junction box and on to a generator shed east of the door. The generator is missing a part: look for NIGHTJAR crates on the slopes. The junction box has a label inside its cover.',
+      'The fuse is in the split crate on the west slope. Junction box: green 1, orange 2, black 3, white 4. Then start the generator.',
+    ],
+  },
+  {
+    id: 'door', part: 3, title: 'The Hidden Entrance', objective: 'The panel has power. Now it wants something.',
+    done: (s) => !!s.flags.doorOpen,
+    target: () => at('ridge', RL.panel),
+    hints: [
+      'Read the access panel: it is not asking for a code.',
+      'A NIGHTJAR door wants a NIGHTJAR badge. Did anyone drop one on the trail?',
+      'The badge is in the mud under the broken camera on the trail, halfway up the valley. Swipe it at the panel.',
+    ],
+  },
+  {
+    id: 'enter', part: 3, title: 'Enter the Facility', objective: 'A dark corridor leads into the mountain',
+    done: (s) => !!s.flags.enteredFacility,
+    target: () => at('ridge', RL.door),
+    start: { thought: 'Stairs and a corridor, going down into the mountain. Cold air comes out of it.', delay: 1.2 },
+  },
+  {
+    id: 'observe', part: 3, title: 'The Observation Room', objective: 'What did they watch from here?',
+    sub: (s, I) => [
+      { label: I.memo.name, done: has(s, 'memo') },
+      { label: 'The monitor wall', done: !!s.flags.monitorsSeen },
+      { label: I.passengerReport.name, done: has(s, 'passengerReport') },
+    ],
+    done: (s) => has(s, 'memo') && has(s, 'passengerReport') && !!s.flags.monitorsSeen,
+    target: (s, pos) => nearest('facility', [!has(s, 'memo') && FX.memo, !s.flags.monitorsSeen && FX.finalMonitor, !has(s, 'passengerReport') && FX.report].filter(Boolean), pos),
+    hints: [
+      'Search the checkpoint desk, then go through the observation door with your badge.',
+      'The monitor wall is on the far wall of the observation room. The papers on the central desk look important.',
+      'The memo is on the checkpoint desk. In the observation room: look at the monitor wall, then take the report from the central desk.',
+    ],
+  },
+  {
+    id: 'archive', part: 3, title: 'The Archive', objective: 'Seat 31A has a restricted record. Find it.',
+    sub: (s) => [
+      { label: 'Search the filing cabinets', done: has(s, 'discrepancies') },
+      { label: 'Unlock the archive terminal', done: !!s.flags.archiveAccess },
+    ],
+    done: (s) => has(s, 'discrepancies') && !!s.flags.archiveAccess,
+    target: (s) => at('facility', has(s, 'discrepancies') ? FX.archTerminal : FX.drawer),
+    start: { thought: '“Seat 31A: see restricted archive.” The records room is off the checkpoint.', delay: 1.0 },
+    hints: [
+      'The terminal asks for a WINDOW CODE, and explains its format. You have already read both parts of it.',
+      'DDHHMM: a day, then a time. Which day did we arrive? When did the observation window open? (Passenger report.)',
+      'The day of arrival is the 23rd, and the window opened at 02:40. The code is 230240.',
+    ],
+  },
+  {
+    id: 'file31a', part: 3, title: 'Subject 31A', objective: 'The terminal released something',
+    done: (s) => has(s, 'file31a'),
+    target: () => at('facility', FX.cabinet),
+    hints: [
+      'Something unlocked in the archive when the terminal accepted the code.',
+      'A red steel cabinet, against the far wall of the archive.',
+      'Open the restricted cabinet on the east wall of the archive and take the file.',
+    ],
+  },
+  {
+    id: 'recording', part: 3, title: 'The Restricted Recording', objective: '“Additional records transferred to the restricted archive.”',
+    sub: (s) => [
+      { label: 'Play the recording', done: !!s.flags.recordingPart1 },
+      { label: 'Recover the rest of it', done: !!s.flags.recordingDone },
+    ],
+    done: (s) => !!s.flags.recordingDone,
+    target: () => at('facility', FX.deck),
+    start: { thought: 'The terminal also unlocked the control room. West of the observation room.', delay: 1.0 },
+    hints: [
+      'The control room is through the LEVEL 4 door on the west side of the observation room. There is a playback deck in it.',
+      'The recording cuts off. The deck says the rest of the data is on a SECONDARY INPUT. Do you carry anything that stores data?',
+      'Insert the memory device from the beach (CACHE / TAIL) into the deck\'s secondary input, then play it again.',
+    ],
+  },
+  {
+    id: 'blackout', part: 3, title: 'Power Failure', objective: 'The lights went out. One screen came on.',
+    done: (s) => !!s.flags.watchedSeen,
+    target: () => at('facility', FX.backup),
+    hints: [
+      'The flashlight still works (F). Something lit up in the observation room.',
+      'One backup monitor turned on by itself in the observation room.',
+      'Go to the small monitor on the east side of the observation room and look at it.',
+    ],
+  },
+  {
+    id: 'final', part: 3, title: 'Observation Active', objective: 'A new recording has been detected',
+    done: (s) => !!s.flags.chapter3Done,
+    target: () => at('facility', FX.finalMonitor),
+    start: { thought: 'The big screen on the monitor wall is blinking. It wants me to see something.', delay: 2.0 },
+    hints: [
+      'The monitor wall in the observation room woke up.',
+      'The big screen in the middle of the monitor wall.',
+      'Go to the middle of the monitor wall in the observation room and press E.',
+    ],
+  },
+
+  // ============================== PART 4 (teaser)
+  {
+    id: 'part4', part: 4, title: 'Phase 3', en: 'Someone has been watching.',
+    objective: 'Part 4, coming soon', final: true,
     done: () => false,
     target: () => null,
   },
 ];
 
-export const PART_SIZES = { 1: 6, 2: 9 };
+export const PART_SIZES = { 1: 6, 2: 9, 3: 11 };
+export const PART_START = { 1: 0, 2: 6, 3: 15, 4: 26 };
+export const PART_TITLES = { 1: 'The Crash', 2: 'The Signal', 3: 'The Observer' };
 export const questById = (id) => QUESTS.findIndex((q) => q.id === id);

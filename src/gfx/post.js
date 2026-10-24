@@ -61,13 +61,15 @@ export function createPost(renderer) {
     // day: gentle bloom only on the brightest highlights; night: lights and the red signal glow more
     // day | night | lobby (the main menu: warmer, more contrast and a heavier vignette)
     setMood(mode) {
-      const night = mode === 'night', lobby = mode === 'lobby';
+      const indoor = mode === 'indoor';
+      const night = mode === 'night' || indoor, lobby = mode === 'lobby';
       bloom.strength = night ? 0.55 : lobby ? 0.3 : 0.28;
       bloom.threshold = night ? 0.55 : 0.9;
       grade.uniforms.uSat.value = night ? 1.0 : lobby ? 1.14 : 1.1;
       grade.uniforms.uContrast.value = lobby ? 1.1 : 1.06;
       grade.uniforms.uVignette.value = night ? 0.34 : lobby ? 0.5 : 0.3;
-      grade.uniforms.uTint.value.set(...(night ? [0.96, 0.99, 1.04] : lobby ? [1.04, 0.99, 0.92] : [1.0, 0.99, 0.965]));
+      if (indoor) { bloom.strength = 0.4; bloom.threshold = 0.7; grade.uniforms.uSat.value = 0.86; }
+      grade.uniforms.uTint.value.set(...(indoor ? [1.0, 1.0, 0.98] : night ? [0.96, 0.99, 1.04] : lobby ? [1.04, 0.99, 0.92] : [1.0, 0.99, 0.965]));
     },
   };
   post.setSize(size.x, size.y);

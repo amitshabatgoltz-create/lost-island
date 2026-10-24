@@ -30,9 +30,21 @@ export const ITEMS = {
   schedule: { name: 'Lookout Schedule', kind: 'clue', toast: 'New clue: lookout shift schedule' },
   routeChart: { name: 'Flight Route Chart', kind: 'clue', toast: 'New clue: flight route chart' },
   stillHere: { name: 'Last Entry', kind: 'clue', toast: 'A new entry was added to the booklet' },
+  // ---- Part 3 (the northern ridge and the observation facility)
+  badge: { name: 'Access Badge', kind: 'key', toast: 'Picked up: NIGHTJAR access badge', desc: 'A muddy NIGHTJAR badge: “FIELD STATION N-1 · LEVEL 2”. The photo has been torn off.' },
+  fuse: { name: 'Main Fuse', kind: 'key', toast: 'Picked up: main fuse, 40 A', desc: 'A heavy cartridge fuse in its packing, stamped “GEN-2 · MAIN · 40 A”.' },
+  fieldRecorder: { name: 'Field Recorder', kind: 'clue', toast: 'New clue: field recorder' },
+  mapFragment: { name: 'Map Fragment', kind: 'clue', toast: 'New clue: the missing piece of the map' },
+  memo: { name: 'Internal Memorandum', kind: 'clue', toast: 'New document: NIGHTJAR internal memorandum' },
+  passengerReport: { name: 'Passenger Classification Report', kind: 'clue', toast: 'New document: passenger classification report' },
+  fieldNote: { name: 'Unfiled Field Note', kind: 'clue', toast: 'New document: unfiled field note' },
+  discrepancies: { name: 'Personnel and Subject Discrepancies', kind: 'clue', toast: 'New document: personnel and subject discrepancies' },
+  file31a: { name: 'Restricted File: 31A', kind: 'clue', toast: 'New document: restricted file 31A' },
+  recording: { name: 'Restricted Recording', kind: 'clue', toast: 'Added to the booklet: the restricted recording' },
+  phase3: { name: 'Observation Active', kind: 'clue', toast: 'A new entry was added to the booklet' },
 };
 
-export const KEY_ORDER = ['flashlight', 'booklet', 'powerCell'];
+export const KEY_ORDER = ['flashlight', 'booklet', 'powerCell', 'badge', 'fuse'];
 export const isStorable = (id) => !!ITEMS[id] && (ITEMS[id].kind === 'gear' || ITEMS[id].kind === 'resource');
 
 export const SUITCASE_THOUGHTS = [

@@ -18,4 +18,7 @@ export const RESOURCE_NODES = [
   { id: 'res:forest:tent', zone: 'forest', item: 'cloth', qty: 2, x: 6.8, z: -71.5, look: 'cloth', label: 'Take cloth from the tent' },
   { id: 'res:forest:branches', zone: 'forest', item: 'wood', qty: 4, x: -48, z: -8, look: 'wood', label: 'Gather dry branches' },
   { id: 'res:forest:trail', zone: 'forest', item: 'wood', qty: 3, x: 5, z: 92, look: 'wood', label: 'Gather planks' },
+  // northern ridge (Part 3) — the abandoned tarp camp and the spares crate
+  { id: 'res:ridge:tarp', zone: 'ridge', item: 'rope', qty: 2, x: -11.6, z: 36.4, look: 'rope', label: 'Take the guy ropes' },
+  { id: 'res:ridge:crate', zone: 'ridge', item: 'electronics', qty: 2, x: -16.6, z: -13.6, look: 'electronics', label: 'Take spare parts from the crate' },
 ];

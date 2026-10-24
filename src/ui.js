@@ -3,12 +3,14 @@ import { SYMBOL_SVG } from './items.js';
 import { ITEMS, KEY_ORDER } from './data/items.js';
 import { stacks, slotsUsed } from './systems/inventory.js';
 import { CLUES, LOCKED_FUTURE_SLOTS, BOOKLET_MESSAGE } from './data/clues.js';
-import { PART_SIZES, QUESTS } from './data/quests.js';
+import { PART_SIZES, PART_START, PART_TITLES, QUESTS } from './data/quests.js';
 import { QUEST_INFO, mainGoal } from './data/story.js';
 import { shoreZ, PATHS } from './zones/beach/terrain.js';
 import { LAYOUT, ITEM_SPOTS } from './zones/beach/layout.js';
 import { FL, FPATHS, PRINTS } from './zones/forest/layout.js';
 import { streamZ } from './zones/forest/terrain.js';
+import { RL, RPATH, RCABLE } from './zones/ridge/layout.js';
+import { ROOMS, FX } from './zones/facility/layout.js';
 
 const $ = (id) => document.getElementById(id);
 const descOf = (c, state) => (typeof c.desc === 'function' ? c.desc(state) : c.desc);
@@ -55,9 +57,9 @@ export class UI {
   // ------------------------------------------------------------ HUD
   setQuest(index, quest, subItems = null, info = {}) {
     if (info.goal) $('quest-goal').textContent = info.goal;
-    const first = { 1: 0, 2: 6, 3: 15 }[quest.part];
+    const first = PART_START[quest.part];
     $('quest-num').textContent = quest.final
-      ? 'Part 3 · coming soon'
+      ? `Part ${quest.part} · coming soon`
       : `Part ${quest.part} · Mission ${index - first + 1} / ${PART_SIZES[quest.part]}`;
     $('quest-title').textContent = quest.title;
     const obj = $('quest-obj');
@@ -111,7 +113,7 @@ export class UI {
       d.title = ITEMS[id].name;
       inv.appendChild(d);
     };
-    for (const id of KEY_ORDER) if (has(id) && !(id === 'powerCell' && state.flags.powerInstalled)) cell(id, 1, true);
+    for (const id of KEY_ORDER) if (has(id) && !(id === 'powerCell' && state.flags.powerInstalled) && !(id === 'fuse' && state.flags.fuseInstalled)) cell(id, 1, true);
     const bag = state.inv;
     if (bag && Object.keys(bag.items).length) {
       const sep = document.createElement('div');
@@ -326,11 +328,10 @@ export class UI {
     } else if (this.journalTab === 'clues') {
       const found = CLUES.filter((c) => state.clues.includes(c.id));
       if (!this.selectedClue || !state.clues.includes(this.selectedClue)) this.selectedClue = found.length ? found[found.length - 1].id : null;
-      const part2Open = state.questIndex >= 6;
       let html = '<h3>Clues found</h3><div class="clue-list">';
-      for (const part of [1, 2]) {
-        if (part === 2 && !part2Open) break;
-        html += `<div class="clue-part">Part ${part} · ${part === 1 ? 'The Crash' : 'The Signal'}</div>`;
+      for (const part of [1, 2, 3]) {
+        if (state.questIndex < PART_START[part]) break;
+        html += `<div class="clue-part">Part ${part} · ${PART_TITLES[part]}</div>`;
         for (const c of CLUES.filter((x) => x.part === part)) {
           if (state.clues.includes(c.id)) {
             const isNew = !this.seenClues.has(c.id);
@@ -354,6 +355,26 @@ export class UI {
         L.innerHTML = `<h3>${sel.title}</h3>${sel.art || ''}<div class="detail-desc">${descOf(sel, state)}</div>${note}`;
       } else L.innerHTML = '<h3>Details</h3><p class="empty">No clues found yet.</p>';
       R.querySelectorAll('[data-clue]').forEach((b) => b.addEventListener('click', () => { this.selectedClue = b.dataset.clue; this.renderJournal(state, playerPos); }));
+    } else if (this.mapView(state) === 'north') {
+      const inside = state.zone === 'facility';
+      R.innerHTML = `${this.mapSwitch(state)}<h3>${inside ? 'N-1: the facility' : 'The northern ridge'}</h3><div class="mapwrap">${inside ? this.facilityMapSVG(state, playerPos) : this.ridgeMapSVG(state, state.zone === 'ridge' ? playerPos : null)}</div>`;
+      const f = state.flags;
+      const lines = ['<div><span class="k" style="color:#1d4f8a">●</span> My location</div>'];
+      if (inside) {
+        lines.push('<div><span class="k">↓</span> The way out, to the ridge</div>');
+        if (f.archiveAccess) lines.push('<div><span class="k">▪</span> Restricted cabinet (archive)</div>');
+        if (f.controlReleased) lines.push('<div><span class="k">▪</span> Control room: the playback deck</div>');
+        if (f.blackout) lines.push('<div><span class="k" style="color:#c0392b">●</span> Emergency power only</div>');
+      } else {
+        lines.push('<div><span class="k">↓</span> The trail from the forest</div>');
+        lines.push('<div><span class="k" style="color:#c0392b">●</span> The red signal, on the cliff</div>');
+        if (f.entranceFound) lines.push('<div><span class="k">▮</span> The door in the cliff: N-1</div>');
+        if (f.genSeen) lines.push('<div><span class="k">▪</span> Generator shed, GEN-2</div>');
+        if (state.collected.includes('mapFragment')) lines.push('<div><span class="k">✕</span> “N-1” on the missing map piece</div>');
+      }
+      L.innerHTML = `<h3>Legend</h3><div class="legend">${lines.join('')}</div>
+        <div class="char-note">${inside ? 'I sketched the rooms as I found them. The door to the lower level is sealed.' : 'A narrow valley between rock walls. The only way is up the trail, toward the cliff.'}</div>`;
+      this.bindMapSwitch(state, playerPos);
     } else if (this.mapView(state) === 'forest') {
       R.innerHTML = `${this.mapSwitch(state)}<h3>The forest: what I have seen so far</h3><div class="mapwrap">${this.forestMapSVG(state, state.zone === 'forest' ? playerPos : null)}</div>`;
       const f = state.flags;
@@ -386,13 +407,55 @@ export class UI {
 
   mapView(state) {
     if (state.questIndex < 7 && state.zone !== 'forest') return 'beach';
-    return this.mapChoice || state.zone;
+    const own = state.zone === 'ridge' || state.zone === 'facility' ? 'north' : state.zone;
+    if (this.mapChoice === 'north' && !state.flags.reachedRidge) return own;
+    return this.mapChoice || own;
   }
 
   mapSwitch(state) {
     if (state.questIndex < 7 && state.zone !== 'forest') return '';
     const v = this.mapView(state);
-    return `<div class="map-switch"><button data-map="beach" class="${v === 'beach' ? 'on' : ''}">Beach</button><button data-map="forest" class="${v === 'forest' ? 'on' : ''}">Forest</button></div>`;
+    const north = state.flags.reachedRidge ? `<button data-map="north" class="${v === 'north' ? 'on' : ''}">North</button>` : '';
+    return `<div class="map-switch"><button data-map="beach" class="${v === 'beach' ? 'on' : ''}">Beach</button><button data-map="forest" class="${v === 'forest' ? 'on' : ''}">Forest</button>${north}</div>`;
+  }
+
+  ridgeMapSVG(state, playerPos) {
+    // ridge (x,z) -> map; north (-z) up
+    const u = (x) => 220 + x * 4.2, v = (z) => 250 + z * 3.4;
+    const f = state.flags;
+    const line = (pts, st) => '<path d="M' + pts.map(([x, z]) => `${u(x).toFixed(1)},${v(z).toFixed(1)}`).join(' L') + `" fill="none" ${st}/>`;
+    const walls = [-1, 1].map((sd) => line(Array.from({ length: 12 }, (_, i) => { const z = 64 - i * 10; return [sd * 27 + Math.sin(z * 0.045) * 4, z]; }), 'stroke="#5a4630" stroke-width="2"')).join('');
+    let marks = `<path d="M${u(-30)},${v(-49)} Q${u(0)},${v(-53)} ${u(30)},${v(-49)}" stroke="#5a4630" stroke-width="3" fill="none"/>`;
+    marks += `<circle cx="${u(RL.mast.x)}" cy="${v(RL.mast.z) + 20}" r="6" fill="#c0392b"/>`;
+    if (f.cableSeen) marks += line(RCABLE, 'stroke="#222" stroke-width="1.6"');
+    if (f.entranceFound) marks += `<rect x="${u(-3)}" y="${v(-47)}" width="${4.2 * 6}" height="8" fill="#3a2e20"/>`;
+    if (f.genSeen) marks += `<rect x="${u(RL.shed.x) - 7}" y="${v(RL.shed.z) - 6}" width="14" height="12" fill="none" stroke="#3a2e20" stroke-width="2"/>`;
+    if (state.collected.includes('fieldRecorder')) marks += `<path d="M${u(RL.tarp.x) - 8},${v(RL.tarp.z) + 5} l8,-10 l8,10 z" fill="none" stroke="#3a2e20" stroke-width="2"/>`;
+    const me = playerPos ? `<circle cx="${u(playerPos.x)}" cy="${v(playerPos.z)}" r="5" fill="#1d4f8a" stroke="#fff" stroke-width="1.5"/>` : '';
+    return `<svg viewBox="0 0 440 480" xmlns="http://www.w3.org/2000/svg">
+      <rect x="10" y="10" width="420" height="460" fill="#d8c79e" opacity="0.35" stroke="#9a835f"/>
+      ${walls}${line(RPATH, 'stroke="#7a5a35" stroke-width="1.8" stroke-dasharray="4 4"')}${marks}${me}
+      <text x="18" y="462" font-size="13" fill="#5a4630" font-family="monospace" direction="ltr">N ↑</text>
+    </svg>`;
+  }
+
+  facilityMapSVG(state, playerPos) {
+    const u = (x) => 230 + x * 11, v = (z) => 260 + z * 11;
+    const f = state.flags;
+    const seen = { corridor: true, checkpoint: true, observation: !!f.obsOpened, archive: !!f.archiveOpened, control: !!f.controlReleased };
+    const rooms = Object.entries(ROOMS).filter(([id]) => seen[id]).map(([id, rm]) => {
+      const [x0, x1, z0, z1] = rm.r;
+      return `<rect x="${u(x0)}" y="${v(z0)}" width="${(x1 - x0) * 11}" height="${(z1 - z0) * 11}" fill="#e6dcc0" stroke="#3a2e20" stroke-width="2"/>
+        <text x="${u((x0 + x1) / 2)}" y="${v((z0 + z1) / 2) + 4}" font-size="10" text-anchor="middle" fill="#5a4630" font-family="monospace">${rm.name.toUpperCase()}</text>`;
+    }).join('');
+    const sealed = `<path d="M${u(-6) - 3},${v(-4)} v22" stroke="#8a2c1f" stroke-width="4"/>`;
+    const me = playerPos ? `<circle cx="${u(playerPos.x)}" cy="${v(playerPos.z)}" r="5" fill="#1d4f8a" stroke="#fff" stroke-width="1.5"/>` : '';
+    const mon = f.obsOpened ? `<rect x="${u(-4)}" y="${v(FX.monitorWall.z) - 3}" width="88" height="5" fill="#3a2e20"/>` : '';
+    return `<svg viewBox="0 0 440 470" xmlns="http://www.w3.org/2000/svg">
+      <rect x="10" y="10" width="420" height="450" fill="#d8c79e" opacity="0.25" stroke="#9a835f"/>
+      ${rooms}${sealed}${mon}${me}
+      <text x="18" y="452" font-size="13" fill="#5a4630" font-family="monospace" direction="ltr">N ↑</text>
+    </svg>`;
   }
 
   bindMapSwitch(state, playerPos) {
@@ -446,7 +509,7 @@ export class UI {
     const display = $('keypad-display');
     const render = (state = '') => {
       display.textContent = (code + '_'.repeat(length)).slice(0, length).split('').join(' ');
-      display.className = state;
+      display.className = state + (length > 4 ? ' long' : '');
     };
     const close = () => { el.classList.add('hidden'); window.removeEventListener('keydown', onKey, true); onClose && onClose(); };
     const submit = () => {
@@ -502,6 +565,19 @@ export class UI {
     return close;
   }
 
+  // a found document, readable at any size (the panel scrolls)
+  openDocument({ title, html, onClose }) {
+    this.openDevice(title, `<div class="doc-paper">${html}</div><p class="dev-note">Added to the booklet (J → Clues). E or Esc to close.</p>`, () => { $('device').classList.remove('doc'); onClose && onClose(); });
+    $('device').classList.add('doc');
+  }
+
+  // a facility screen: an old green terminal; returns the body so the caller can wire its buttons
+  openTerminal({ title, html, onClose }) {
+    const close = this.openDevice(title, `<div class="crt">${html}</div>`, () => { $('device').classList.remove('term'); onClose && onClose(); });
+    $('device').classList.add('term');
+    return { body: $('device-body'), close };
+  }
+
   // three dials of symbols; check(codeArray) -> bool
   openSymbolLock({ symbols, size, check, onClose }) {
     const pos = Array(size).fill(0);
@@ -532,16 +608,16 @@ export class UI {
   }
 
   // connect four wires to four terminals; check(assign) -> bool
-  openWiring({ wires, rules, check, onClose }) {
+  openWiring({ wires, rules, check, onClose, title = 'Wiring panel · RELAY 04', cardTitle = 'Service card' }) {
     const assign = {};
     let picked = null;
-    const close = this.openDevice('Wiring panel · RELAY 04', `
+    const close = this.openDevice(title, `
       <div class="wiring">
         <div class="wire-col">${wires.map((w) => `<button class="wire" data-w="${w.id}" style="--c:${w.color}"><span class="plug"></span>${w.name}</button>`).join('')}</div>
         <svg class="wire-svg" viewBox="0 0 100 200" preserveAspectRatio="none" aria-hidden="true"></svg>
         <div class="term-col">${[1, 2, 3, 4].map((t) => `<button class="term" data-t="${t}">${t}</button>`).join('')}</div>
       </div>
-      <div class="card">${rules ? '<b>Service card:</b><br>' + rules.map((r, i) => `${i + 1}. ${r}`).join('<br>') : 'I have no diagram.'}</div>
+      <div class="card">${rules ? `<b>${cardTitle}:</b><br>` + rules.map((r, i) => `${i + 1}. ${r}`).join('<br>') : 'I have no diagram.'}</div>
       <div class="dev-row"><button id="wire-clear" class="btn ghost">Disconnect all</button><button id="wire-try" class="btn primary">Power on</button></div>
       <div id="dev-msg" class="dev-msg" aria-live="polite">Pick a wire, then a terminal.</div>`, onClose);
     const body = $('device-body');

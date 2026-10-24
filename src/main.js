@@ -1,4 +1,4 @@
-// LOST: The Missing Island — Parts 1 & 2. Bootstrap, game modes, zone loading, quest chain and saves.
+// LOST: The Missing Island — Parts 1–3. Bootstrap, game modes, zone loading, quest chain and saves.
 // Zone content and zone-specific interactions live in src/zones/*, story data in src/data/*.
 import * as THREE from 'three';
 import { createEnvironment } from './env.js';
@@ -9,7 +9,7 @@ import { UI } from './ui.js';
 import { Sequencer } from './core/sequencer.js';
 import { disposeTree } from './core/dispose.js';
 import { ITEMS } from './data/items.js';
-import { QUESTS, questById } from './data/quests.js';
+import { QUESTS, questById, PART_START } from './data/quests.js';
 import { FINAL_ENTRY, CLUES } from './data/clues.js';
 import { QUEST_INFO, mainGoal, CLUE_LEARNED } from './data/story.js';
 import { freshState, loadState, saveState, clearState, loadSettings, saveSettings, storageAvailable } from './save.js';
@@ -37,7 +37,10 @@ import '@fontsource/caveat/700.css';
 const ZONES = {
   beach: () => import('./zones/beach/index.js'),
   forest: () => import('./zones/forest/index.js'),
+  ridge: () => import('./zones/ridge/index.js'),
+  facility: () => import('./zones/facility/index.js'),
 };
+const LOADING_TEXT = { beach: 'Back to the beach…', forest: 'Entering the forest…', ridge: 'Climbing north…', facility: 'Into the mountain…' };
 
 const params = new URLSearchParams(location.search);
 const DEBUG = params.has('debug');
@@ -126,7 +129,7 @@ function setMode(m) {
 const api = {
   get state() { return game.state; },
   get player() { return player; },
-  audio, ui, seq,
+  audio, ui, seq, renderer,
   has,
   collect,
   setFlag(k, v = true) { game.state.flags[k] = v; },
@@ -143,6 +146,14 @@ const api = {
   openWiring: (opts) => openPuzzle('openWiring', opts),
   openTuning: (opts) => openPuzzle('openTuning', { ...opts, tuner: audio.startTuning() }),
   openScope,
+  // a document or a screen fills the panel; the game waits behind it
+  readDocument(id, opts = {}) {
+    const c = CLUES.find((x) => x.id === id);
+    if (!c) return;
+    audio.page();
+    openPuzzle('openDocument', { title: c.title, html: typeof c.desc === 'function' ? c.desc(game.state) : c.desc, ...opts });
+  },
+  openTerminal: (opts) => openPuzzle('openTerminal', opts),
   openBoard() {
     audio.page();
     ui.journalTab = 'clues';
@@ -227,6 +238,7 @@ async function boot() {
 async function loadZone(id, onProgress = () => {}, stateForEnv = null) {
   if (game.zone && game.zone.id === id) return game.zone;
   if (game.zone) {
+    if (game.zone.dispose) game.zone.dispose();
     game.lastDispose = disposeTree(game.zone.group);
     game.zone = null;
   }
@@ -266,9 +278,10 @@ async function enterZone(to, spawnName) {
   await new Promise((r) => setTimeout(r, 650));
   const firstForest = to === 'forest' && !game.state.flags.nightfall;
   if (to === 'forest') game.state.flags.nightfall = true;
+  const from = game.zone.id;
   game.state.zone = to;
   ui.show('loading', true);
-  ui.setLoading(0, to === 'forest' ? 'Entering the forest…' : 'Back to the beach…');
+  ui.setLoading(0, to === 'forest' && from !== 'beach' ? 'Back to the forest…' : LOADING_TEXT[to]);
   await loadZone(to, (p, t) => ui.setLoading(p, t));
   ui.show('loading', false);
   const sp = game.zone.spawns[spawnName];
@@ -284,6 +297,7 @@ async function enterZone(to, spawnName) {
   audio.resumeAmbience();
   ui.fade(0, 1.4);
   if (to === 'forest') setTimeout(() => tip('forest'), 3000);
+  if (game.zone.onEnter) game.zone.onEnter(from);
   if (firstForest) {
     ui.titleCard('A few hours later', 'The forest · night');
     api.thought('Darkness fell fast. The flashlight is all I have, and one red light above the treetops.', 5, 2.5);
@@ -351,7 +365,7 @@ function openStorage(containerId, onClosed) {
     title: CONTAINERS[containerId].name,
     bag: s.inv,
     chest,
-    keyItems: ['flashlight', 'booklet', 'powerCell'].filter((id) => has(id) && !(id === 'powerCell' && s.flags.powerInstalled)),
+    keyItems: ['flashlight', 'booklet', 'powerCell', 'badge', 'fuse'].filter((id) => has(id) && !(id === 'powerCell' && s.flags.powerInstalled) && !(id === 'fuse' && s.flags.fuseInstalled)),
     move(direction, id, qty) {
       const [from, to] = direction === 'toChest' ? [s.inv, chest] : [chest, s.inv];
       const r = transfer(from, to, id, qty);
@@ -374,7 +388,7 @@ function openPuzzle(method, opts) {
   setMode('puzzle');
   releasePointer();
   ui.setPrompt(null);
-  ui[method]({
+  return ui[method]({
     ...opts,
     onClose() {
       if (game.mode === 'puzzle') setMode('play');
@@ -475,7 +489,7 @@ function onQuestStart(i) {
   game.questTime = 0;
   audio.quest();
   ui.flashQuest();
-  ui.toast(q.final ? 'Part 2 complete' : `New mission: ${q.title}`, 'quest', 4);
+  ui.toast(q.final ? `Part ${q.part - 1} complete` : `New mission: ${q.title}`, 'quest', 4);
   if (q.start) api.thought(q.start.thought, 4.2, q.start.delay || 0.8);
 }
 
@@ -517,9 +531,8 @@ function persist() {
 // ------------------------------------------------------------------ screens & flow
 function partLabel(s) {
   const q = QUESTS[Math.min(s.questIndex, QUESTS.length - 1)];
-  if (q.final) return 'Part 2 complete';
-  const first = q.part === 1 ? 0 : 6;
-  return `Part ${q.part} · Mission ${s.questIndex - first + 1}`;
+  if (q.final) return `Part ${q.part - 1} complete`;
+  return `Part ${q.part} · Mission ${s.questIndex - PART_START[q.part] + 1}`;
 }
 
 // main lobby on the beach (the forest is left behind if the player was there)
@@ -531,6 +544,7 @@ async function showTitle() {
   seq.clear();
   game.anims.length = 0;
   ['hud', 'pause', 'endcard', 'keypad', 'final-entry', 'reveal', 'skip-hint'].forEach((id) => ui.show(id, false));
+  audio.setIndoor(0);
   ui.subtitle(null);
   ui.blur(0);
   ui.eyes('hidden');
@@ -633,6 +647,7 @@ async function continueGame() {
   enterPlay();
   ui.toast('Progress loaded', '', 2.5);
   checkQuests(); // also resumes a reveal interrupted by a reload
+  chapter3Intro();
 }
 
 function startIntro() {
@@ -808,10 +823,15 @@ function showEndcard(part) {
     $('end-title').textContent = 'The Crash';
     $('end-obj').innerHTML = 'New mission: Find the source of the signal in the forest.';
     $('btn-keep').textContent = 'Continue to Part 2';
-  } else {
+  } else if (part === 2) {
     $('end-kicker').textContent = 'End of Part 2';
     $('end-title').textContent = 'The Signal';
-    $('end-obj').innerHTML = '<span class="end-en">Someone is still here.</span><br>The lights in the forest came on. The story continues in Part 3.';
+    $('end-obj').innerHTML = '<span class="end-en">Someone is still here.</span><br>The lights in the forest came on, and the signal moved north.';
+    $('btn-keep').textContent = 'Continue to Part 3';
+  } else {
+    $('end-kicker').textContent = 'Chapter 3 complete';
+    $('end-title').textContent = 'The Observer';
+    $('end-obj').innerHTML = '<span class="end-en">“Someone has been watching.”</span><br><span class="end-protocol">NIGHTJAR PROTOCOL — PHASE 3 ACTIVATED</span>';
     $('btn-keep').textContent = 'Keep exploring';
   }
   $('end-stats').textContent = `${s.clues.length} booklet entries · ${s.hintsUsed || 0} hints · progress saved`;
@@ -820,8 +840,21 @@ function showEndcard(part) {
 
 $('btn-keep').addEventListener('click', () => {
   ui.show('endcard', false);
-  portal.commercialBreak(audio).then(() => { setMode('play'); updateLockHint(); requestPointer(); });
+  portal.commercialBreak(audio).then(() => { setMode('play'); updateLockHint(); requestPointer(); chapter3Intro(); });
 });
+
+// the chapter 3 title, once, when the player first plays on after the Part 2 ending
+function chapter3Intro() {
+  const s = game.state;
+  if (s.flags.ch3Intro || s.questIndex !== questById('north')) return;
+  s.flags.ch3Intro = true;
+  persist();
+  setTimeout(() => {
+    ui.titleCard('Chapter 3', 'The Observer');
+    audio.signalBeeps();
+    setTimeout(() => ui.toast('Objective: Follow the northbound signal.', 'quest', 5), 2600);
+  }, 600);
+}
 $('btn-end-main').addEventListener('click', () => { persist(); ui.show('endcard', false); showTitle(); });
 
 // ------------------------------------------------------------------ pause & settings
@@ -906,7 +939,7 @@ $('btn-title-settings').addEventListener('click', () => {
 $('btn-settings-back').addEventListener('click', () => ui.show('pause', false));
 
 function confirmNew(onYes) {
-  $('confirm-text').textContent = 'Start a new game? Your saved progress in both parts will be deleted.';
+  $('confirm-text').textContent = 'Start a new game? Your saved progress in every part will be deleted.';
   ui.show('confirm', true);
   $('confirm-yes').onclick = () => { ui.show('confirm', false); onYes(); };
   $('confirm-no').onclick = () => ui.show('confirm', false);
@@ -1009,8 +1042,11 @@ function onBoundary(type) {
   if (game.boundaryCooldown > 0 || !game.zone) return;
   game.boundaryCooldown = 4;
   const forest = game.zone.id === 'forest';
-  const msg = forest ? {
-    forest: 'The thicket to the north is too dense. The lights... are farther than they look.',
+  const north = game.zone.boundaryText && game.zone.boundaryText(type, game.state);
+  const msg = north || (forest ? {
+    forest: game.state.flags.endingSeen
+      ? 'Too dense here. The lights are to the north-east: the trail past the camp leads that way.'
+      : 'The thicket to the north is too dense. The lights... are farther than they look.',
     sea: 'The trail back to the beach is to the south, in the middle.',
     side: 'The thicket is too dense to get through here.',
     cliff: 'Too steep to climb. Maybe there is a way up somewhere else.',
@@ -1021,7 +1057,7 @@ function onBoundary(type) {
     sea: 'The water is too deep. No point swimming without knowing where to.',
     side: 'The rocks are too steep to climb.',
     cliff: 'Too steep to climb here.',
-  }[type];
+  }[type]);
   ui.thought(msg, 3);
 }
 
@@ -1080,6 +1116,7 @@ function step(dt) {
   zone.update(dt, game.time, player.pos, camera);
   audio.updateListener(camera);
   const amb = zone.ambience(player.pos);
+  audio.setIndoor(amb.indoor || 0, amb.hum ?? 1);
   audio.updateAmbience(game.time, amb.sea, amb.forest, env.mode === 'night' ? 1 : 0, amb.stream);
 }
 

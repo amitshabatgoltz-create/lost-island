@@ -169,6 +169,7 @@ export class Player {
     this.zone = zone;
     this.colliders = zone.colliders;
     this.occluders = zone.occluders;
+    this.ceiling = zone.ceiling || 0; // indoor zones: the camera stays under the ceiling
   }
 
   heightAt(x, z) { return this.zone ? this.zone.heightAt(x, z) : 0; }
@@ -484,6 +485,7 @@ export class Player {
     this.ray.far = want;
     const hits = this.ray.intersectObjects(this.occluders, false);
     if (hits.length) want = Math.max(0.8, hits[0].distance - 0.3);
+    if (this.ceiling && dir.y > 0.01) want = Math.max(0.8, Math.min(want, (this.ceiling - 0.6 - origin.y) / dir.y));
     // terrain
     for (let i = 1; i <= 10; i++) {
       const d = (want * i) / 10;
@@ -495,6 +497,7 @@ export class Player {
     const camPos = origin.clone().addScaledVector(dir, this.curDist);
     const gh = this.heightAt(camPos.x, camPos.z) + 0.3;
     if (camPos.y < gh) camPos.y = gh;
+    if (this.ceiling && camPos.y > this.ceiling - 0.5) camPos.y = this.ceiling - 0.5;
     this.camera.position.copy(camPos);
     this.camera.lookAt(origin.x, origin.y - 0.1, origin.z);
   }

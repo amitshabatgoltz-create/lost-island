@@ -42,3 +42,23 @@ export const TUNE = { min: 400, max: 430, target: 417.9, lock: 0.15, hold: 1.2 }
 
 // Locker: “APPROVAL / ARRIVAL” — the flight was approved on 14 Sep (Part 1 document), the plane arrived on 23 Sep.
 export const LOCKER_CODE = '1423';
+
+// ---------------------------------------------------------------- Part 3
+// Junction box outside the bunker door: the label inside the cover leaves one arrangement:
+// green 1, orange 2, black 3, white 4.
+export const JUNCTION_WIRES = [
+  { id: 'black', name: 'Black', color: '#2b2b2b' },
+  { id: 'white', name: 'White', color: '#e8e4da' },
+  { id: 'orange', name: 'Orange', color: '#e07a2a' },
+  { id: 'green', name: 'Green', color: '#3fa55b' },
+];
+export const JUNCTION_RULES = [
+  'Green (earth) goes on the top terminal.',
+  'White never sits next to green.',
+  'Orange (feed) sits directly above black.',
+];
+export const JUNCTION_SOLUTION = { green: 1, orange: 2, black: 3, white: 4 };
+
+// Archive terminal: “WINDOW CODE = DAY OF ARRIVAL + TIME THE WINDOW OPENED (DDHHMM)”.
+// Arrival is the 23rd (calendar, schedule, document); the passenger report says the window opened at 02:40.
+export const ARCHIVE_CODE = '230240';

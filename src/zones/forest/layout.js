@@ -27,7 +27,12 @@ export const FL = {
 export const FPATHS = [
   [[0, 108], [2, 88], [-4, 68], [-6, 52], [-6, 34], [-16, 20], [-30, 4], [-40, -10]],
   [[-42, -16], [-36, -30], [-20, -44], [0, -55], [16, -60]],
+  // Part 3: from the camp, north-east out of the forest toward the mountain
+  [[22, -76], [27, -84], [33, -91], [40, -98], [44, -108]],
 ];
+
+// the way north (Part 3): walking off the north edge here leads to the ridge
+export const NORTH_EXIT = { x: 40, z: -95.5, hw: 9 };
 
 // footprint trails (no path, just prints)
 export const PRINTS = {
