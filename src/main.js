@@ -21,6 +21,7 @@ import { GFX } from './gfx/materials.js';
 import { setAnisotropy } from './gfx/textures.js';
 import { Lobby } from './lobby.js';
 import { DEFAULT_SKIN } from './data/skins.js';
+import { Minimap } from './systems/minimap.js';
 
 // zones are separate chunks, loaded on demand and disposed when left
 const ZONES = {
@@ -51,6 +52,7 @@ const audio = new AudioSystem();
 const settings = loadSettings();
 audio.volume = settings.volume;
 const seq = new Sequencer();
+const minimap = new Minimap($('hud'));
 
 const game = {
   mode: 'loading', // loading | title | intro | wake | play | journal | keypad | paused | reveal | cine | transition | end
@@ -217,6 +219,7 @@ async function loadZone(id, onProgress = () => {}, stateForEnv = null) {
   env.scene.add(zone.group);
   game.zone = zone;
   player.setZone(zone);
+  minimap.setZone(zone);
   camera.far = zone.cameraFar;
   camera.updateProjectionMatrix();
   applyZoneEnv(stateForEnv || game.state);
@@ -1066,6 +1069,7 @@ function step(dt) {
   audio.updateListener(camera);
   const amb = zone.ambience(player.pos);
   audio.updateAmbience(game.time, amb.sea, amb.forest, env.mode === 'night' ? 1 : 0, amb.stream);
+  minimap.update(player.pos, player.camYaw, player.facing, game.state);
 }
 
 function loop() {

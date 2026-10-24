@@ -10,6 +10,7 @@ import {
 } from '../shared.js';
 import { createBeachInteractions } from './interactions.js';
 import { buildBaseCamp } from './basecamp.js';
+import { MINIMAP } from './minimap.js';
 import { RESOURCE_NODES } from '../../data/resources.js';
 import { terrainMaterial, bakeContactShade, vegetationMaterials, triplanar, scaleUV, shadeSpotsFromColliders } from '../../gfx/materials.js';
 import { sandTex, grassTex, dirtTex, rockTex, rippleNormal, panelTex } from '../../gfx/textures.js';
@@ -85,6 +86,7 @@ export async function build(env, api, onProgress = () => {}) {
     id: 'beach',
     group, colliders, occluders, heightAt,
     bounds: BOUNDS,
+    minimap: MINIMAP,
     deepWater: -0.6,
     cameraFar: 4000,
     wreck, signal, base,

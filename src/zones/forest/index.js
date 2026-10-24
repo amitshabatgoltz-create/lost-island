@@ -18,6 +18,7 @@ import {
 } from './props.js';
 import { CARVINGS, SYMBOLS } from '../../data/puzzles.js';
 import { createForestInteractions } from './interactions.js';
+import { MINIMAP } from './minimap.js';
 import { RESOURCE_NODES } from '../../data/resources.js';
 
 const yieldFrame = () => new Promise((r) => setTimeout(r, 0));
@@ -135,6 +136,7 @@ export async function build(env, api, onProgress = () => {}) {
     group, colliders, occluders, heightAt,
     isPlatform: (x, z) => cabin.inside(x, z) || bridgeHeight(x, z) !== null || climbs.platformHeight(x, z) !== null,
     bounds: BOUNDS,
+    minimap: MINIMAP,
     deepWater: null,
     cameraFar: 200,
     parts,

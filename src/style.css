@@ -479,3 +479,13 @@ button { font-family: inherit; }
   #prompt { white-space: normal; max-width: 86vw; text-align: center; }
   .toast { white-space: normal; max-width: 86vw; text-align: center; }
 }
+
+/* ---------------------------------------------------------------- minimap (top-right corner, quest panel sits under it) */
+#minimap { position: absolute; top: 18px; right: 20px; width: 168px; height: 168px; border-radius: 50%; opacity: 0.9;
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.45); pointer-events: none; }
+#minimap canvas { display: block; width: 100%; height: 100%; }
+#hud #quest { top: 198px; }
+@media (max-width: 760px), (max-height: 520px) {
+  #minimap { top: 10px; right: 10px; width: 108px; height: 108px; }
+  #hud #quest { top: 126px; }
+}
