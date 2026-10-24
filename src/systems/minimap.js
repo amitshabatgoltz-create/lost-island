@@ -6,6 +6,7 @@
 //   minimap: {
 //     margin: 30,                                    // metres of scenery shown around the play bounds
 //     view: 42,                                      // metres from the centre to the rim (zoom)
+//     title: 'THE BEACH',                            // heading of the big map (M)
 //     ground(x, z, h, slope) => [r, g, b] (0..255)   // ground colour (sand, grass, water...)
 //     paths: [[[x, z], ...], ...],                   // trails drawn on top
 //     landmarks: [{ x, z, label, kind, far, found(state) }], // shown once found(state) is true
@@ -137,6 +138,106 @@ export class Minimap {
     c.stroke(); c.fill();
     c.restore();
   }
+}
+
+// ------------------------------------------------------------------ the big map (M): the whole zone, north up
+export class BigMap {
+  constructor(minimap) {
+    this.minimap = minimap;
+    const el = document.createElement('div');
+    el.id = 'bigmap';
+    el.className = 'screen hidden';
+    el.innerHTML = '<div class="bigmap-frame"><div class="bigmap-title"></div><canvas></canvas>'
+      + '<div class="bigmap-foot"><span><kbd>M</kbd> / <kbd>Esc</kbd> close</span><span class="bigmap-scale"></span></div></div>';
+    document.body.appendChild(el);
+    this.el = el;
+    this.canvas = el.querySelector('canvas');
+    this.open = false;
+  }
+
+  show(on, pos, facing, state) {
+    this.open = on;
+    this.el.classList.toggle('hidden', !on);
+    if (on) this.draw(pos, facing, state);
+  }
+
+  draw(pos, facing, state) {
+    const b = this.minimap.base, zone = this.minimap.zone;
+    if (!b) return;
+    this.args = [pos, facing, state];
+    this.el.querySelector('.bigmap-title').textContent = (zone.minimap && zone.minimap.title) || zone.id.toUpperCase();
+    // fit the whole picture into the screen, keeping its shape
+    const maxW = Math.min(innerWidth * 0.92, 1100), maxH = innerHeight * 0.78;
+    const k = Math.min(maxW / b.w, maxH / b.h); // css pixels per metre
+    const cw = Math.round(b.w * k), ch = Math.round(b.h * k);
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const cv = this.canvas;
+    cv.style.width = cw + 'px'; cv.style.height = ch + 'px';
+    cv.width = Math.round(cw * dpr); cv.height = Math.round(ch * dpr);
+    const c = cv.getContext('2d');
+    const s = k * dpr;
+    const toPx = (x, z) => [(x - b.minX) * s, (z - b.minZ) * s];
+    c.imageSmoothingEnabled = true;
+    c.drawImage(b.canvas, 0, 0, cv.width, cv.height);
+
+    // known places
+    c.font = `700 ${Math.round(12 * dpr)}px system-ui, sans-serif`;
+    c.textAlign = 'center';
+    c.textBaseline = 'bottom';
+    for (const m of b.landmarks) {
+      if (m.found && !m.found(state)) continue;
+      let [x, y] = toPx(m.x, m.z);
+      const outside = x < 0 || y < 0 || x > cv.width || y > cv.height;
+      const pad = 14 * dpr;
+      x = Math.max(pad, Math.min(cv.width - pad, x));
+      y = Math.max(pad * 1.6, Math.min(cv.height - pad * 0.5, y));
+      c.fillStyle = KIND_COLOR[m.kind] || KIND_COLOR.place;
+      c.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+      c.lineWidth = 2 * dpr;
+      const r = 5 * dpr;
+      c.beginPath();
+      if (outside) c.arc(x, y, r * 0.8, 0, Math.PI * 2); else c.rect(x - r, y - r, r * 2, r * 2);
+      c.fill(); c.stroke();
+      if (m.label) {
+        const t = outside ? m.label + ' ›' : m.label;
+        c.lineWidth = 4 * dpr;
+        c.strokeText(t, x, y - r - 2 * dpr);
+        c.fillText(t, x, y - r - 2 * dpr);
+      }
+    }
+
+    // the player
+    const [px, py] = toPx(pos.x, pos.z);
+    c.save();
+    c.translate(px, py);
+    c.rotate(Math.atan2(Math.sin(facing), -Math.cos(facing)));
+    const a = 10 * dpr;
+    c.beginPath();
+    c.moveTo(0, -a * 1.15); c.lineTo(a * 0.8, a * 0.85); c.lineTo(0, a * 0.4); c.lineTo(-a * 0.8, a * 0.85); c.closePath();
+    c.fillStyle = '#ffffff';
+    c.strokeStyle = 'rgba(0, 0, 0, 0.85)';
+    c.lineWidth = 2.5 * dpr;
+    c.stroke(); c.fill();
+    c.restore();
+    c.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+    c.lineWidth = 1.5 * dpr;
+    c.beginPath(); c.arc(px, py, 16 * dpr, 0, Math.PI * 2); c.stroke();
+
+    // north marker (north is always up here)
+    const nx = cv.width - 22 * dpr, ny = 26 * dpr;
+    c.fillStyle = 'rgba(10, 16, 22, 0.8)';
+    c.beginPath(); c.arc(nx, ny, 13 * dpr, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#ffb4a8';
+    c.textBaseline = 'middle';
+    c.fillText('N', nx, ny + 1 * dpr);
+
+    // scale bar: a round number of metres about 80 px long
+    const metres = [5, 10, 20, 25, 50, 100].find((m) => m * k >= 70) || 100;
+    this.el.querySelector('.bigmap-scale').innerHTML = `<i style="width:${Math.round(metres * k)}px"></i>${metres} m`;
+  }
+
+  // keep it sharp when the window changes size
+  resize() { if (this.open && this.args) this.draw(...this.args); }
 }
 
 // ------------------------------------------------------------------ baking the zone picture

@@ -8,6 +8,7 @@ const clamp01 = (v) => Math.max(0, Math.min(1, v));
 const SEA = [38, 104, 128], DEEP = [20, 56, 82], SAND = [214, 196, 146], GRASS = [116, 136, 70], JUNGLE = [52, 86, 46], ROCK = [124, 122, 112];
 
 export const MINIMAP = {
+  title: 'THE BEACH',
   margin: 34,
   ground(x, z, h, slope) {
     const d = inlandDist(x, z);

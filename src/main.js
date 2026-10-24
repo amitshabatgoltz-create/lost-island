@@ -21,7 +21,7 @@ import { GFX } from './gfx/materials.js';
 import { setAnisotropy } from './gfx/textures.js';
 import { Lobby } from './lobby.js';
 import { DEFAULT_SKIN } from './data/skins.js';
-import { Minimap } from './systems/minimap.js';
+import { Minimap, BigMap } from './systems/minimap.js';
 import { portal } from './portal.js';
 // fonts are bundled with the game (no outside requests, works on game portals)
 import '@fontsource/heebo/300.css';
@@ -67,6 +67,7 @@ const settings = loadSettings();
 audio.volume = settings.volume;
 const seq = new Sequencer();
 const minimap = new Minimap($('hud'));
+const bigmap = new BigMap(minimap);
 
 const game = {
   mode: 'loading', // loading | title | intro | wake | play | journal | keypad | paused | reveal | cine | transition | end
@@ -96,6 +97,7 @@ window.addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
   intro && intro.resize();
+  bigmap.resize();
 });
 
 const has = (id) => game.state.collected.includes(id);
@@ -523,7 +525,7 @@ function objectiveTarget() {
 
 function persist() {
   const s = game.state;
-  if (player && game.zone && ['play', 'journal', 'keypad', 'storage', 'puzzle', 'scope', 'end', 'paused', 'cine'].includes(game.mode)) {
+  if (player && game.zone && ['play', 'journal', 'map', 'keypad', 'storage', 'puzzle', 'scope', 'end', 'paused', 'cine'].includes(game.mode)) {
     s.player = { zone: game.zone.id, x: +player.pos.x.toFixed(2), z: +player.pos.z.toFixed(2), yaw: +player.facing.toFixed(3) };
   }
   if (game.zone) s.zone = game.zone.id;
@@ -748,6 +750,23 @@ function openJournal() {
     game.state.flags.bookletRead = true;
     game.pendingBookletQuest = true; // the quest updates when the booklet is closed, after reading
   }
+}
+
+// M: the big map of the whole zone (gameplay waits while it is open)
+function openMap() {
+  setMode('map');
+  ui.setPrompt(null);
+  game.input = {};
+  bigmap.show(true, player.pos, player.facing, game.state);
+  audio.page();
+  releasePointer();
+}
+
+function closeMap() {
+  bigmap.show(false);
+  audio.page();
+  setMode('play');
+  updateLockHint();
 }
 
 function closeJournal() {
@@ -1015,6 +1034,10 @@ window.addEventListener('keydown', (e) => {
       if (game.mode === 'play') openJournal();
       else if (game.mode === 'journal') closeJournal();
       break;
+    case 'KeyM':
+      if (game.mode === 'play') openMap();
+      else if (game.mode === 'map') closeMap();
+      break;
     case 'KeyQ':
       // Q: look through the survivor's eyes, or from behind again (remembered with the other settings)
       if (game.mode === 'play') {
@@ -1032,6 +1055,7 @@ window.addEventListener('keydown', (e) => {
       break;
     case 'Escape':
       if (game.mode === 'journal') closeJournal();
+      else if (game.mode === 'map') closeMap();
       else if (game.mode === 'paused') resume();
       else if (game.mode === 'scope') closeScope();
       else if (game.mode === 'play') pause();

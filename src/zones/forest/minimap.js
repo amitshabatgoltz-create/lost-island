@@ -9,6 +9,7 @@ const FLOOR = [46, 78, 44], CLEAR = [96, 104, 64], WATER = [40, 92, 112], ROCK =
 const has = (s, id) => s.collected.includes(id);
 
 export const MINIMAP = {
+  title: 'THE FOREST',
   margin: 24,
   ground(x, z, h, slope) {
     if (Math.abs(z - streamZ(x)) < 2.6) return WATER;
