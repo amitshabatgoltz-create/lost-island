@@ -1,5 +1,5 @@
 // Third-person survivor: the chosen rigged Mixamo character (src/data/skins.js), the animation clips from
-// public/models/survivor.glb, collision and orbit camera.
+// public/models/survivor.glb (plus newer clips in public/models/anims/), collision and orbit camera.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
@@ -8,8 +8,12 @@ import { SKINS, DEFAULT_SKIN, skinById } from './data/skins.js';
 
 const tmpV = new THREE.Vector3();
 const MODEL_URL = './models/survivor.glb';
+// extra clips (tools/anims/README.md); a clip here replaces survivor.glb's clip of the same name
+const ANIM_URLS = ['./models/anims/start_walking.glb'];
 const SCALE = 0.0104; // the model is authored in centimetres, 176 cm tall
 const WALK = 2.8, RUN = 5.8; // m/s
+const START_WALK_RATE = 1.7; // Start_Walking is a slower stroll than Walking: sped up to meet it
+const START_WALK_END = 1.3; // clip time where the first steps are done and the walk cycle takes over
 const CLIP_WALK = 1.63 * SCALE * 100, CLIP_RUN = 4.0 * SCALE * 100; // ground speed the walk / run clips were authored at
 const HIPS = 'mixamorig10Hips';
 const ease = (k) => k * k * (3 - 2 * k);
@@ -67,8 +71,14 @@ export class Player {
 
   // survivor.glb carries the animation clips (shared by every skin) and the default character
   async load(onProgress = () => {}, skinId = DEFAULT_SKIN) {
-    const gltf = await loadGLB(MODEL_URL, onProgress);
-    this.clips = gltf.animations;
+    const [gltf, ...extra] = await Promise.all([
+      loadGLB(MODEL_URL, onProgress),
+      // a missing clip file only costs that clip's upgrade: survivor.glb's own version stays
+      ...ANIM_URLS.map((url) => loadGLB(url).catch((err) => { console.warn(err); return null; })),
+    ]);
+    const clips = new Map(gltf.animations.map((c) => [c.name, c]));
+    for (const g of extra) if (g) for (const c of g.animations) clips.set(c.name, c);
+    this.clips = [...clips.values()];
     this.baseHipsY = gltf.scene.getObjectByName(HIPS).position.y;
     this.skins = { [SKINS[0].id]: Promise.resolve(this.prepareSkin(gltf.scene, SKINS[0])) };
     this.yawDelta = { Walking_Turn_180: -3.12, Climbing_Down: -1.55, Start_Climbing_Ladder: 3.1 }; // body turn at the end of a clip
@@ -126,7 +136,9 @@ export class Player {
     bandage.position.y = 13 * k;
     bandage.castShadow = true;
     mesh.getObjectByName('mixamorig10RightForeArm').add(bandage);
-    return { skin, mesh, clips, bandage, hips, head: mesh.getObjectByName('mixamorig10Head') };
+    mesh.updateMatrixWorld(true);
+    const unit = hips.parent.getWorldScale(new THREE.Vector3()).x; // metres per hips-track unit
+    return { skin, mesh, clips, bandage, hips, unit, head: mesh.getObjectByName('mixamorig10Head') };
   }
 
   // wear a skin: swaps the character mesh and rebuilds the animation mixer for its skeleton
@@ -154,6 +166,32 @@ export class Player {
       const tr = clip.tracks.find((t) => t.name === `${HIPS}.position`);
       const v = tr.values, n = v.length;
       this.hipsDelta[clip.name] = new THREE.Vector3(v[n - 3] - v[0], v[n - 2] - v[1], v[n - 1] - v[2]);
+    }
+    // Start_Walking carries its own forward travel: the player moves at the clip's pace so the first steps do not
+    // slide, and the hips travel is taken back out (null for an in-place version of the clip)
+    const sw = rec.clips.find((c) => c.name === 'Start_Walking');
+    const swHips = sw && sw.tracks.find((t) => t.name === `${HIPS}.position`);
+    this.startWalk = swHips && this.hipsDelta.Start_Walking.z * rec.unit > 0.5
+      ? { hips: swHips.createInterpolant(), p0: new THREE.Vector3().fromArray(swHips.values), unit: rec.unit }
+      : null;
+    if (this.startWalk) {
+      const sw0 = this.startWalk;
+      // the clip's walking pace once under way (m/s at timeScale 1), for keeping the feet planted while it fades out
+      sw0.pace = (sw0.hips.evaluate(sw.duration)[2] - sw0.hips.evaluate(1)[2]) / (sw.duration - 1) * rec.unit;
+      // the Walking cycle time whose legs match the end of the first steps, so the walk picks up in step
+      const walk = rec.clips.find((c) => c.name === 'Walking');
+      const legs = ['LeftUpLeg', 'RightUpLeg', 'LeftLeg', 'RightLeg'].map((b) => {
+        const f = (c) => c.tracks.find((t) => t.name === `mixamorig10${b}.quaternion`);
+        return f(sw) && f(walk) ? [f(sw).createInterpolant(), f(walk).createInterpolant()] : null;
+      }).filter(Boolean);
+      const target = legs.map(([a]) => Array.from(a.evaluate(START_WALK_END)));
+      let best = -Infinity;
+      sw0.walkPhase = 0;
+      for (let t = 0; t < walk.duration; t += 1 / 60) {
+        let score = 0;
+        legs.forEach(([, w], i) => { const q = w.evaluate(t); score += Math.abs(q[0] * target[i][0] + q[1] * target[i][1] + q[2] * target[i][2] + q[3] * target[i][3]); });
+        if (score > best) { best = score; sw0.walkPhase = t; }
+      }
     }
     // walk / run / idle blend: always playing, weights set every frame
     for (const n of ['Idle', 'Breathing_Idle', 'Walking', 'Running']) {
@@ -265,6 +303,13 @@ export class Player {
     this.play('Stand_To_Sit', { reverse: true, timeScale: 1.25, lock: true, fadeIn: 0.15, fadeOut: 0.3 });
   }
 
+  // Start_Walking's forward ground speed (m/s at timeScale 1) at clip time t, from its hips travel
+  startWalkSpeed(t) {
+    const h = 1 / 30, i = this.startWalk.hips;
+    const z1 = i.evaluate(Math.max(0, t - h))[2], z2 = i.evaluate(t + h)[2];
+    return Math.max(0, (z2 - z1) / (2 * h)) * this.startWalk.unit;
+  }
+
   // rotate camera from mouse deltas
   look(dx, dy) {
     const s = 0.0024 * this.settings.sens;
@@ -306,11 +351,25 @@ export class Player {
       } else if (!holdFacing) {
         this.facing += d * Math.min(1, dt * 12);
       }
-      // first step from standing still
-      if (this.still && !this.act && this.mixer && !running) this.play('Start_Walking', { timeScale: 1.6, to: 0.85, fadeIn: 0.1, fadeOut: 0.35 });
+      // first step from standing still: the weight shift and the first steps of the Start_Walking clip
+      if (this.still && !this.act && this.mixer && !running) {
+        if (this.startWalk) this.play('Start_Walking', { timeScale: START_WALK_RATE, from: 0.25, to: START_WALK_END, fadeIn: 0.1, fadeOut: 0.3 });
+        else this.play('Start_Walking', { timeScale: 1.6, to: 0.85, fadeIn: 0.1, fadeOut: 0.35 });
+      }
       this.moveDir = { x: mx, z: mz };
       this.still = false;
     } else if (this.speed < 0.2) this.still = true;
+    // during the first steps the clip sets the pace; letting go or breaking into a run blends straight out
+    const sw = this.act && this.act.name === 'Start_Walking' && this.startWalk ? this.act : null;
+    if (sw && !sw.ending) {
+      if (!(mx || mz) || running || this.busy) sw.ending = true;
+      else if (sw.action.time >= sw.to) {
+        sw.ending = true;
+        this.actions.Walking.time = this.startWalk.walkPhase;
+      } else this.speed = this.startWalkSpeed(sw.action.time) * sw.action.timeScale;
+    }
+    // fading out into the walk: the clip keeps pace with the ground so its planted foot does not slide
+    if (sw && sw.ending) sw.action.timeScale = Math.max(0.5, Math.min(3.5, this.speed / this.startWalk.pace));
     if (this.speed > 0.01 && this.moveDir && !(this.act && this.act.root)) {
       const step = this.speed * dt;
       // move in two sub-steps for stable collisions
@@ -395,6 +454,16 @@ export class Player {
     if (cur && cur.root && cur.w > 0) {
       const d = this.hipsDelta[cur.name];
       this.hips.position.addScaledVector(d, -ease(cur.p) * Math.min(1, cur.w));
+    }
+    // Start_Walking: the player root already moved, so hold its hips over the feet (also while it fades out)
+    if (this.startWalk) {
+      const a = this.actions.Start_Walking;
+      const w = a.isScheduled() ? a.getEffectiveWeight() : 0;
+      if (w > 0) {
+        const v = this.startWalk.hips.evaluate(a.time), p0 = this.startWalk.p0;
+        this.hips.position.x -= (v[0] - p0.x) * w;
+        this.hips.position.z -= (v[2] - p0.z) * w;
+      }
     }
   }
 

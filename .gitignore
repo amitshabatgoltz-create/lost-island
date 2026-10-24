@@ -3,3 +3,5 @@ dist
 tools/skins/fbx/
 tools/skins/tmp/
 _preview/
+tools/anims/fbx/
+tools/anims/tmp/
