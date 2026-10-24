@@ -17,11 +17,19 @@
   "build": {
     "appId": "com.amitshabatgoltz.lostisland",
     "productName": "LOST",
-    "files": ["main.cjs", "app/**/*"],
-    "directories": { "output": "release" },
+    "files": [
+      "main.cjs",
+      "app/**/*"
+    ],
+    "directories": {
+      "output": "release"
+    },
     "icon": "icon.png",
     "win": {
-      "target": ["nsis", "portable"]
+      "target": [
+        "nsis",
+        "portable"
+      ]
     },
     "nsis": {
       "oneClick": false,
@@ -33,6 +41,15 @@
     },
     "portable": {
       "artifactName": "LOST-Portable.${ext}"
-    }
+    },
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://github.com/amitshabatgoltz-create/lost-island/releases/download/pc-latest/"
+      }
+    ]
+  },
+  "dependencies": {
+    "electron-updater": "6.8.10"
   }
 }
