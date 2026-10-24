@@ -2,12 +2,13 @@
 // A container is plain data so it saves as-is: { slots: number, items: { [itemId]: qty } }.
 // Every change goes through add/remove/transfer, which keep quantities whole, positive and conserved.
 import { ITEMS, isStorable } from '../data/items.js';
+import { T } from '../i18n/index.js';
 
 export const BAG_SLOTS = 6;
 
 export const CONTAINERS = {
   // future containers (crates at new research sites, a bigger chest after a base upgrade) go here
-  baseChest: { name: 'Wooden Chest', slots: 16, zone: 'beach' },
+  baseChest: { name: T('Wooden Chest'), slots: 16, zone: 'beach' },
 };
 
 export function createContainer(slots) {

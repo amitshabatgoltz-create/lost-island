@@ -518,3 +518,34 @@ button { font-family: inherit; }
 .bigmap-foot kbd { display: inline-block; min-width: 18px; padding: 0 5px; border: 1px solid var(--accent); border-radius: 3px; color: var(--accent); font-family: var(--font); font-weight: 700; text-align: center; }
 .bigmap-scale { display: flex; align-items: center; gap: 8px; }
 .bigmap-scale i { display: inline-block; height: 6px; border: 2px solid #dbe7f2; border-top: none; }
+
+/* ---------------------------------------------------------------- language */
+.lang-btn { position: absolute; top: 16px; left: 16px; z-index: 2; padding: 6px 14px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.35); background: rgba(9, 14, 21, 0.55); color: #e9eef4; font-size: 14px; cursor: pointer; backdrop-filter: blur(4px); }
+.lang-btn:hover { background: rgba(242, 166, 78, 0.35); border-color: #ffe2b4; }
+.settings select { margin-inline-start: 8px; padding: 3px 6px; border-radius: 4px; border: 1px solid var(--line); background: #0e1620; color: var(--ink); font: inherit; }
+
+/* Hebrew reads right to left: mirror the layout that the English version flipped */
+[dir="rtl"] .play-icon { border-left: none; border-right: 16px solid #1a1006; }
+[dir="rtl"] .sel-count, [dir="rtl"] #quest-obj .en { text-align: right; }
+[dir="rtl"] .sel-arrow.prev { left: calc(33% + 130px); }
+[dir="rtl"] .sel-arrow.next { left: calc(33% - 190px); }
+[dir="rtl"] #prompt kbd { margin-right: 0; margin-left: 8px; }
+[dir="rtl"] #controls-hint b { margin-right: 0; margin-left: 3px; }
+[dir="rtl"] .book-tabs { left: auto; right: 40px; }
+[dir="rtl"] .close { right: auto; left: 6px; }
+[dir="rtl"] .clue, [dir="rtl"] .clue .txt { text-align: right; }
+[dir="rtl"] .clue.new::after { content: 'חדש'; margin-left: 0; margin-right: auto; }
+[dir="rtl"] .quest-keys kbd { margin-right: 0; margin-left: 5px; }
+[dir="rtl"] .quest-hint kbd { margin-right: 0; margin-left: 6px; }
+[dir="rtl"] .crate-head { padding-right: 0; padding-left: 30px; }
+[dir="rtl"] .mat b { margin-left: 0; margin-right: auto; }
+[dir="rtl"] .close-x { right: auto; left: 10px; }
+[dir="rtl"] .sub .tr, [dir="rtl"] #pb-lines .tr { direction: rtl; }
+@media (max-width: 760px), (max-aspect-ratio: 1/1) {
+  [dir="rtl"] .sel-arrow.prev { left: auto; right: 10px; }
+  [dir="rtl"] .sel-arrow.next { left: 10px; right: auto; }
+}
+@media (max-width: 760px) {
+  [dir="rtl"] .book-tabs { left: auto; right: 8px; }
+  [dir="rtl"] .close { right: auto; left: 8px; }
+}

@@ -4,6 +4,7 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 import { fabricTex, clothTex, tileFbm } from './gfx/textures.js';
 import { mulberry32 } from './noise.js';
 import { buildExterior } from './intro-exterior.js';
+import { T } from './i18n/index.js';
 
 const CUT = 6.4; // outside shot -> cabin
 const CABIN_T0 = 1.0; // the cabin timeline runs this much later than it did before the outside shot
@@ -430,7 +431,7 @@ export class IntroScene {
     const ui = this.ui, a = this.audio;
 
     // ---------------- outside shot
-    this.at(0.3, 'card', () => ui.titleCard('Flight NV-2207 · 02:14 · over the Pacific Ocean', 'Three hours to go. A vacation, finally.'));
+    this.at(0.3, 'card', () => ui.titleCard(T('Flight NV-2207 · 02:14 · over the Pacific Ocean'), T('Three hours to go. A vacation, finally.')));
     this.at(3.4, 'strike', () => { this.ext.strike(); a.noiseBurst(2.2, 0.3, 'lowpass', 180, 0.35); });
     this.at(5.0, 'bump', () => { this.ext.bump(); a.thump(0.3); });
     this.at(CUT, 'cut', () => { this.outside = false; });
@@ -439,7 +440,7 @@ export class IntroScene {
     // ---------------- cabin timeline
     const T0 = CABIN_T0;
     this.at(T0 + 5.5, 'belt', () => { a.seatbelt(); this.signOn = true; });
-    this.at(T0 + 6.6, 'thought1', () => ui.subtitle('Just another air pocket...', 'thought'));
+    this.at(T0 + 6.6, 'thought1', () => ui.subtitle(T('Just another air pocket...'), 'thought'));
     this.at(T0 + 9.6, 'jolt', () => { a.thump(0.6); ui.subtitle(null); this.lightning = 1; });
     this.at(T0 + 11.2, 'pa', () => {
       a.chime(); a.radio(5.5);

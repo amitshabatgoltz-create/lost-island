@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { SKINS, DEFAULT_SKIN, skinById } from './data/skins.js';
 import { saveSettings } from './save.js';
+import { T, RTL } from './i18n/index.js';
 
 const $ = (id) => document.getElementById(id);
 const ease = (k) => k * k * (3 - 2 * k);
@@ -60,8 +61,9 @@ export class Lobby {
     window.addEventListener('keydown', (e) => {
       if (!this.active || this.view !== 'select' || e.repeat) return;
       // left arrow goes back, right arrow goes forward
-      if (e.code === 'ArrowLeft') this.choose(this.sel - 1);
-      else if (e.code === 'ArrowRight') this.choose(this.sel + 1);
+      const back = RTL ? 'ArrowRight' : 'ArrowLeft', fwd = RTL ? 'ArrowLeft' : 'ArrowRight';
+      if (e.code === back) this.choose(this.sel - 1);
+      else if (e.code === fwd) this.choose(this.sel + 1);
       else if (e.code === 'Enter') this.confirm();
       else if (e.code === 'Escape' && !this.first) this.cancel();
     });
@@ -126,7 +128,7 @@ export class Lobby {
     this.view = 'select';
     this.spin = 0;
     this.spinVel = 0;
-    $('select-kicker').textContent = first ? 'Before takeoff' : 'Change character';
+    $('select-kicker').textContent = first ? T('Before takeoff') : T('Change character');
     this.ui.show('sel-back', !first);
     this.ui.show('title', false);
     this.ui.show('select', true);
@@ -166,7 +168,7 @@ export class Lobby {
       this.player.showBandage(false);
     } catch (err) {
       console.error(err);
-      if (token === this.loadToken) this.ui.toast('Could not load the character. Try again.', 'warn', 3);
+      if (token === this.loadToken) this.ui.toast(T('Could not load the character. Try again.'), 'warn', 3);
     } finally {
       card && card.classList.remove('loading');
       if (token === this.loadToken) $('sel-confirm').disabled = false;

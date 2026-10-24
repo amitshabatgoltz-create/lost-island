@@ -4,6 +4,7 @@ import { heightAt } from './terrain.js';
 import { LAYOUT, ITEM_SPOTS } from './layout.js';
 import { ITEMS, SUITCASE_THOUGHTS } from '../../data/items.js';
 import { addResourceNodes } from '../resources.js';
+import { T } from '../../i18n/index.js';
 
 export function createBeachInteractions(zone, api) {
   const list = [];
@@ -33,11 +34,11 @@ export function createBeachInteractions(zone, api) {
       id, kind: 'pickup', obj: mesh, glint, x: s.x, z: s.z,
       available: () => !has(id) && itemUnlocked(id),
       visible: () => !has(id) && itemUnlocked(id),
-      label: () => `Pick up: ${ITEMS[id].name}`,
+      label: () => T`Pick up: ${ITEMS[id].name}`,
       use: () => {
         api.collect(id);
-        if (id === 'ticket') api.thought('Seat 31A... that is the seat next to mine. It was empty.', 4, 0.4);
-        if (id === 'device') api.thought('The same symbol. And a label: CACHE / TAIL.', 4, 0.4);
+        if (id === 'ticket') api.thought(T('Seat 31A... that is the seat next to mine. It was empty.'), 4, 0.4);
+        if (id === 'device') api.thought(T('The same symbol. And a label: CACHE / TAIL.'), 4, 0.4);
       },
     });
   }
@@ -61,10 +62,10 @@ export function createBeachInteractions(zone, api) {
   function openBlackSuitcase() {
     if (!has('flashlight')) {
       api.audio.deny();
-      api.thought('It is too dark between the rocks, and something black is stuck deep in there. I need a flashlight.', 4);
+      api.thought(T('It is too dark between the rocks, and something black is stuck deep in there. I need a flashlight.'), 4);
       return;
     }
-    if (!api.player.flashlightOn) { api.setFlashlight(true); api.toast('You turned on the flashlight'); }
+    if (!api.player.flashlightOn) { api.setFlashlight(true); api.toast(T('You turned on the flashlight')); }
     api.setFlag('suitcaseOpened');
     animating = true;
     api.audio.latch();
@@ -74,7 +75,7 @@ export function createBeachInteractions(zone, api) {
     const lid = blackSuitcase.userData.lid;
     api.animate(1.3, (k) => { lid.rotation.x = -k * k * (3 - 2 * k) * 1.95; }, () => {
       animating = false;
-      api.thought('This suitcase doesn\'t belong to any passenger. Inside: just one booklet, wrapped in plastic.', 4.5);
+      api.thought(T('This suitcase doesn\'t belong to any passenger. Inside: just one booklet, wrapped in plastic.'), 4.5);
       api.checkQuests();
     });
   }
@@ -82,7 +83,7 @@ export function createBeachInteractions(zone, api) {
   add({
     id: 'blackSuitcase', kind: 'container', x: bs.x, z: bs.z, radius: 2.4,
     available: () => !api.state.flags.suitcaseOpened,
-    label: () => (has('flashlight') ? 'Open the black suitcase' : 'Black suitcase in the rocks'),
+    label: () => (has('flashlight') ? T('Open the black suitcase') : T('Black suitcase in the rocks')),
     locked: () => !has('flashlight'),
     use: openBlackSuitcase,
   });
@@ -90,7 +91,7 @@ export function createBeachInteractions(zone, api) {
     id: 'booklet', kind: 'pickup', obj: bookletMesh, glint: bGlint, x: bs.x, z: bs.z, radius: 2.4,
     available: () => api.state.flags.suitcaseOpened && !has('booklet') && !animating,
     visible: () => !has('booklet'),
-    label: () => `Pick up: ${ITEMS.booklet.name}`,
+    label: () => T`Pick up: ${ITEMS.booklet.name}`,
     use: () => api.collect('booklet'),
   });
 
@@ -99,7 +100,7 @@ export function createBeachInteractions(zone, api) {
     add({
       id: 'suitcase' + i, kind: 'examine', x: s.x, z: s.z, radius: 1.8,
       available: () => true,
-      label: () => 'Check suitcase',
+      label: () => T('Check suitcase'),
       use: () => { api.audio.click(); api.thought(SUITCASE_THOUGHTS[i % SUITCASE_THOUGHTS.length]); },
     });
   });
@@ -110,13 +111,13 @@ export function createBeachInteractions(zone, api) {
   add({
     id: 'fuselage', kind: 'examine', x: ex, z: ez, radius: 3.0,
     available: () => true,
-    label: () => 'Look inside the fuselage',
+    label: () => T('Look inside the fuselage'),
     use: () => {
       api.audio.click();
       api.setFlag('exploredWreck');
       api.thought(api.state.flags.nightfall
-        ? 'In the dark, the fuselage looks like a skeleton. Nobody came back here.'
-        : 'The seats are empty. Nobody here... where are all the other passengers?', 4.2);
+        ? T('In the dark, the fuselage looks like a skeleton. Nobody came back here.')
+        : T('The seats are empty. Nobody here... where are all the other passengers?'), 4.2);
       api.checkQuests();
     },
   });
@@ -124,21 +125,21 @@ export function createBeachInteractions(zone, api) {
   add({
     id: 'tailExamine', kind: 'examine', x: LAYOUT.tail.x - 2, z: LAYOUT.tail.z + 3.2, radius: 2.6,
     available: () => true,
-    label: () => 'Check the tail',
+    label: () => T('Check the tail'),
     use: () => {
       api.audio.click();
       const q = api.state.questIndex;
       api.thought(q === 5 && !has('document')
-        ? 'TAIL. Here. By the cargo container, something under a rock.'
-        : q >= 6 ? 'Behind the tail a trail leads into the forest. The red light comes from there.'
-          : 'The tail was ripped off and thrown to the edge of the forest. The airline logo is still intact.', 4);
+        ? T('TAIL. Here. By the cargo container, something under a rock.')
+        : q >= 6 ? T('Behind the tail a trail leads into the forest. The red light comes from there.')
+          : T('The tail was ripped off and thrown to the edge of the forest. The airline logo is still intact.'), 4);
     },
   });
   // the trailhead into the forest (Part 2)
   add({
     id: 'trailhead', kind: 'examine', x: 1, z: -95, radius: 3.2,
     available: () => api.state.questIndex >= 6,
-    label: () => 'Enter the forest',
+    label: () => T('Enter the forest'),
     use: () => api.enterZone('forest', 'fromBeach'),
   });
 
@@ -148,7 +149,7 @@ export function createBeachInteractions(zone, api) {
   add({
     id: 'baseChest', kind: 'container', x: B.spots.chest.x, z: B.spots.chest.z, radius: 1.5,
     available: () => true,
-    label: () => (baseOpen() ? 'Open the wooden chest' : 'Makeshift wooden chest'),
+    label: () => (baseOpen() ? T('Open the wooden chest') : T('Makeshift wooden chest')),
     use: () => {
       claimBase();
       api.audio.latch();
@@ -159,23 +160,23 @@ export function createBeachInteractions(zone, api) {
   add({
     id: 'workbench', kind: 'machine', x: B.spots.bench.x, z: B.spots.bench.z, radius: 1.5,
     available: () => true,
-    label: () => 'Workbench',
+    label: () => T('Workbench'),
     use: () => { claimBase(); api.audio.click(); api.openWorkbench(); },
   });
   add({
     id: 'evidenceBoard', kind: 'examine', x: B.spots.board.x, z: B.spots.board.z, radius: 1.6,
     available: () => true,
-    label: () => (has('booklet') ? 'Evidence board' : 'Empty corkboard'),
+    label: () => (has('booklet') ? T('Evidence board') : T('Empty corkboard')),
     use: () => {
       claimBase();
-      if (!has('booklet')) { api.audio.click(); api.thought('An empty corkboard. If I find something worth remembering, I will pin it here.', 3.8); return; }
+      if (!has('booklet')) { api.audio.click(); api.thought(T('An empty corkboard. If I find something worth remembering, I will pin it here.'), 3.8); return; }
       api.openBoard();
     },
   });
   add({
     id: 'lantern', kind: 'machine', x: B.spots.lantern.x, z: B.spots.lantern.z, radius: 1.4,
     available: () => true,
-    label: () => (api.state.base.lanternOn ? 'Turn off the lantern' : 'Turn on the lantern'),
+    label: () => (api.state.base.lanternOn ? T('Turn off the lantern') : T('Turn on the lantern')),
     use: () => {
       api.state.base.lanternOn = !api.state.base.lanternOn;
       B.setLantern(api.state.base.lanternOn);
@@ -186,17 +187,17 @@ export function createBeachInteractions(zone, api) {
   add({
     id: 'campSeat', kind: 'examine', x: B.spots.seat.x, z: B.spots.seat.z, radius: 1.5,
     available: () => !api.player.sitting,
-    label: () => 'Sit by the campfire',
+    label: () => T('Sit by the campfire'),
     use: () => {
       claimBase();
       api.player.sit(B.sitSpot, B.sitSpot.yaw);
-      api.thought('A moment to breathe. The waves, the fire. I am still here.', 3.6, 2.2);
+      api.thought(T('A moment to breathe. The waves, the fire. I am still here.'), 3.6, 2.2);
     },
   });
   function claimBase() {
     if (api.state.base.found) return;
     api.state.base.found = true;
-    api.toast('Shelter found: base camp on the beach', 'quest', 4);
+    api.toast(T('Shelter found: base camp on the beach'), 'quest', 4);
     api.persist();
   }
 
@@ -220,11 +221,11 @@ export function createBeachInteractions(zone, api) {
     const s = api.state;
     if (!s.base.found && Math.hypot(player.pos.x - B.spots.center.x, player.pos.z - B.spots.center.z) < 3.5) {
       claimBase();
-      api.thought('Someone built a shelter here from plane parts, or I will. A chest, a workbench, a board. I could live here.', 4.6);
+      api.thought(T('Someone built a shelter here from plane parts, or I will. A chest, a workbench, a board. I could live here.'), 4.6);
     }
     if (!s.flags.exploredWreck && Math.hypot(player.pos.x - f.x, player.pos.z - f.z) < 10.5) {
       api.setFlag('exploredWreck');
-      api.thought('This is... what is left of the plane.', 3);
+      api.thought(T('This is... what is left of the plane.'), 3);
       api.checkQuests();
     }
     if (device.obj.visible) device.obj.traverse((o) => { if (o.name === 'led') o.material.emissiveIntensity = (t % 1.2) < 0.15 ? 4 : 0.2; });

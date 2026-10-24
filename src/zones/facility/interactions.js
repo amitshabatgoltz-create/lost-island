@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { FX, DOORS } from './layout.js';
 import { SCREEN } from './props.js';
 import { ARCHIVE_CODE } from '../../data/puzzles.js';
+import { T, paTranslation } from '../../i18n/index.js';
 
 export function createFacilityInteractions(zone, api) {
   const { has } = api;
@@ -32,15 +33,15 @@ export function createFacilityInteractions(zone, api) {
   const terminal = (title, html, onClose) => api.openTerminal({ title, html, onClose });
 
   // ------------------------------------------------------------------ checkpoint
-  takeDoc('memo', { x: FX.memo.x + 0.05, z: -1.55 }, 'Take the memo from the desk', 1.15, () => api.thought('“Anomalous conditions.” So that is why nobody has come looking for us.', 4.4, 0.4));
+  takeDoc('memo', { x: FX.memo.x + 0.05, z: -1.55 }, T('Take the memo from the desk'), 1.15, () => api.thought(T('“Anomalous conditions.” So that is why nobody has come looking for us.'), 4.4, 0.4));
   add({
     id: 'secTerminal', kind: 'machine', x: FX.desk.x + 0.75, z: -1.5, radius: 1.15,
     available: () => true,
-    label: () => 'Use the security terminal',
+    label: () => T('Use the security terminal'),
     use: () => {
       api.audio.click();
       const f = flags();
-      terminal('Security terminal · N-1', `<h4>SECURITY STATUS</h4><table>
+      terminal(T('Security terminal · N-1'), `<h4>SECURITY STATUS</h4><table>
         <tr><td>MAIN ENTRANCE</td><td class="warn">OPEN · BADGE L2 · 0 MIN AGO</td></tr>
         <tr><td>OBSERVATION</td><td>${f.obsOpened ? '<span class="warn">OPEN</span>' : 'LOCKED · L2'}</td></tr>
         <tr><td>RECORDS</td><td>${f.archiveOpened ? '<span class="warn">OPEN</span>' : 'LOCKED · L2'}</td></tr>
@@ -52,19 +53,19 @@ export function createFacilityInteractions(zone, api) {
         </table><p class="dim">The entrance log shows my badge. It noticed me the second I walked in.</p>`);
     },
   });
-  takeDoc('fieldNote', { x: -4.6, z: -1.2 }, 'Search the open locker', 1.2, () => api.thought('A dark raincoat. Like the one in the photo from the camp. But no face, and no name. Just “N.”', 4.8, 0.4));
-  examine('lockers', { x: -3.1, z: -1.2 }, 'Check the lockers', () => (has('fieldNote') ? 'Empty lockers, and the raincoat. Whoever wore it left in a hurry, or did not need it anymore.' : 'Locked lockers. Names scratched off the tags. One at the end is standing open.'), 1.0);
-  examine('sealedDoor', { x: -5.25, z: DOORS.sealed.c }, 'Look at the sealed door', () => (flags().chapter3Done
-    ? 'Silent now. The bars are still there. Something on the other side knocked, three times.'
-    : '“B-2 LOWER LEVEL. SEALED BY ORDER.” Steel bars welded across it. The paint on the bars is scratched... from the other side.'), 1.4);
+  takeDoc('fieldNote', { x: -4.6, z: -1.2 }, T('Search the open locker'), 1.2, () => api.thought(T('A dark raincoat. Like the one in the photo from the camp. But no face, and no name. Just “N.”'), 4.8, 0.4));
+  examine('lockers', { x: -3.1, z: -1.2 }, T('Check the lockers'), () => (has('fieldNote') ? T('Empty lockers, and the raincoat. Whoever wore it left in a hurry, or did not need it anymore.') : T('Locked lockers. Names scratched off the tags. One at the end is standing open.')), 1.0);
+  examine('sealedDoor', { x: -5.25, z: DOORS.sealed.c }, T('Look at the sealed door'), () => (flags().chapter3Done
+    ? T('Silent now. The bars are still there. Something on the other side knocked, three times.')
+    : T('“B-2 LOWER LEVEL. SEALED BY ORDER.” Steel bars welded across it. The paint on the bars is scratched... from the other side.')), 1.4);
 
   // ------------------------------------------------------------------ badge doors
   const badgeDoor = (id, flag, pos, name) => add({
     id: id + 'Door', kind: 'machine', x: pos.x, z: pos.z, radius: 1.4,
     available: () => !flags()[flag],
-    label: () => `Swipe the badge (${name})`,
+    label: () => T`Swipe the badge (${name})`,
     use: () => {
-      if (!has('badge')) { api.audio.deny(); api.thought('A badge reader. I need a NIGHTJAR badge.', 3.4); return; }
+      if (!has('badge')) { api.audio.deny(); api.thought(T('A badge reader. I need a NIGHTJAR badge.'), 3.4); return; }
       api.setFlag(flag);
       api.audio.unlock();
       api.audio.slideDoor();
@@ -79,11 +80,11 @@ export function createFacilityInteractions(zone, api) {
   add({
     id: 'controlDoor', kind: 'machine', x: -7.3, z: DOORS.control.c + 1.5, radius: 1.4,
     available: () => !flags().controlOpened,
-    label: () => (flags().controlReleased ? 'Open the control room' : 'Swipe the badge (CONTROL)'),
+    label: () => (flags().controlReleased ? T('Open the control room') : T('Swipe the badge (CONTROL)')),
     use: () => {
       if (!flags().controlReleased) {
         api.audio.deny();
-        api.thought('“LEVEL 4.” My badge is only level 2. Something else has to release this door.', 4);
+        api.thought(T('“LEVEL 4.” My badge is only level 2. Something else has to release this door.'), 4);
         return;
       }
       api.setFlag('controlOpened');
@@ -101,16 +102,16 @@ export function createFacilityInteractions(zone, api) {
     available: () => !finale,
     label: () => {
       const f = flags();
-      if (f.watchedSeen && !f.chapter3Done) return 'Play the new recording';
-      return 'Look at the monitor wall';
+      if (f.watchedSeen && !f.chapter3Done) return T('Play the new recording');
+      return T('Look at the monitor wall');
     },
     use: () => {
       const f = flags();
       if (f.watchedSeen && !f.chapter3Done) return startFinale();
-      if (f.chapter3Done) { api.audio.click(); api.thought('Dark. Every screen. But the camera in the corner is still watching.', 4); return; }
-      if (f.blackout) { api.audio.click(); api.thought('All dead... except one small screen, on the east side of the room.', 4); return; }
+      if (f.chapter3Done) { api.audio.click(); api.thought(T('Dark. Every screen. But the camera in the corner is still watching.'), 4); return; }
+      if (f.blackout) { api.audio.click(); api.thought(T('All dead... except one small screen, on the east side of the room.'), 4); return; }
       api.audio.click();
-      terminal('Monitor wall · observation room', `<h4>CAM 01 · LZ-2 BEACH</h4><p>Last frame 02:41, 23/09. The wreck on the sand.</p>
+      terminal(T('Monitor wall · observation room'), `<h4>CAM 01 · LZ-2 BEACH</h4><p>Last frame 02:41, 23/09. The wreck on the sand.</p>
         <h4>NIGHTJAR SYSTEM</h4><p>RESTRICTED · STANDBY. “Subject records: see central desk.”</p>
         <h4>CAM 05 · RELAY 04</h4><p>Last frame: the transmitter clearing, tonight. Someone by the mast.</p>
         <h4>FACILITY MAP</h4><p>Checkpoint · Observation · Records · Control (L4) · B-2 lower level: <span class="alert">SEALED</span></p>
@@ -121,53 +122,53 @@ export function createFacilityInteractions(zone, api) {
       () => { if (!flags().monitorsSeen) { api.setFlag('monitorsSeen'); api.persist(); api.checkQuests(); } });
     },
   });
-  takeDoc('passengerReport', { x: FX.report.x, z: -12.05 }, 'Take the report from the desk', 1.3, () => api.thought('They sorted us before we sat down. And seat 31A has its own restricted file. The records room...', 4.6, 0.4));
-  examine('centralDesk', { x: 1.1, z: -12.05 }, 'Check the console', 'A console with switches for every camera. Most are labeled with places I have been. One is labeled “B-2”.', 1.0);
-  examine('reel', { x: FX.reel.x, z: FX.reel.z + 0.9 }, 'Look at the tape recorder', 'An old reel-to-reel recorder. The tape is labeled “NV 2207 / 23 SEP / CABIN AUDIO”. Cabin audio. They recorded inside our plane.', 1.3);
-  examine('islandMap', { x: -7.0, z: FX.islandMap.z }, 'Look at the wall map', 'A map of the island. The flight route comes in from the north-west, and a red line bends it down to LZ-2. N-1 is circled.', 1.6);
-  examine('corkboard', { x: 7.0, z: FX.corkboard.z }, 'Look at the board', 'Photos pinned with red string: the beach, the relay, the camp, the ridge. One card says “31A”. The last card has only a question mark.', 1.6);
+  takeDoc('passengerReport', { x: FX.report.x, z: -12.05 }, T('Take the report from the desk'), 1.3, () => api.thought(T('They sorted us before we sat down. And seat 31A has its own restricted file. The records room...'), 4.6, 0.4));
+  examine('centralDesk', { x: 1.1, z: -12.05 }, T('Check the console'), T('A console with switches for every camera. Most are labeled with places I have been. One is labeled “B-2”.'), 1.0);
+  examine('reel', { x: FX.reel.x, z: FX.reel.z + 0.9 }, T('Look at the tape recorder'), T('An old reel-to-reel recorder. The tape is labeled “NV 2207 / 23 SEP / CABIN AUDIO”. Cabin audio. They recorded inside our plane.'), 1.3);
+  examine('islandMap', { x: -7.0, z: FX.islandMap.z }, T('Look at the wall map'), T('A map of the island. The flight route comes in from the north-west, and a red line bends it down to LZ-2. N-1 is circled.'), 1.6);
+  examine('corkboard', { x: 7.0, z: FX.corkboard.z }, T('Look at the board'), T('Photos pinned with red string: the beach, the relay, the camp, the ridge. One card says “31A”. The last card has only a question mark.'), 1.6);
   add({
     id: 'backup', kind: 'machine', x: 6.3, z: FX.backup.z, radius: 1.5,
     available: () => !watching,
-    label: () => (flags().blackout ? 'Look at the screen' : 'Check the small monitor'),
+    label: () => (flags().blackout ? T('Look at the screen') : T('Check the small monitor')),
     use: () => {
       const f = flags();
-      if (!f.blackout) { api.audio.click(); api.thought('A small spare monitor. Switched off. Its cable goes into the wall, not into the console.', 4); return; }
+      if (!f.blackout) { api.audio.click(); api.thought(T('A small spare monitor. Switched off. Its cable goes into the wall, not into the console.'), 4); return; }
       if (!f.watchedSeen) return startWatched();
       api.audio.click();
-      api.thought('CAM 07. Live. Me, looking at a screen that shows me looking at a screen.', 4);
+      api.thought(T('CAM 07. Live. Me, looking at a screen that shows me looking at a screen.'), 4);
     },
   });
 
   // ------------------------------------------------------------------ archive
-  takeDoc('discrepancies', { x: 12.25, z: -3.45 }, 'Take the file from the open drawer', 1.25, () => api.thought('Arrival dates that have not happened yet. Some of them years from now.', 4.4, 0.4));
+  takeDoc('discrepancies', { x: 12.25, z: -3.45 }, T('Take the file from the open drawer'), 1.25, () => api.thought(T('Arrival dates that have not happened yet. Some of them years from now.'), 4.4, 0.4));
   let codeTries = 0;
   add({
     id: 'archTerminal', kind: 'machine', x: FX.archTerminal.x, z: 2.45, radius: 1.5,
     available: () => true,
-    label: () => (flags().archiveAccess ? 'Use the archive terminal' : 'Use the archive terminal'),
+    label: () => (flags().archiveAccess ? T('Use the archive terminal') : T('Use the archive terminal')),
     use: () => {
       api.audio.click();
       if (flags().archiveAccess) {
-        terminal('Archive terminal', `<h4>NIGHTJAR ARCHIVE</h4><p>ACCESS GRANTED.</p><p>RESTRICTED CABINET R-1: <span class="warn">RELEASED</span></p><p>CONTROL (L4): <span class="warn">RELEASED</span></p><p class="dim">Restricted recording: transferred to control, playback deck.</p>`);
+        terminal(T('Archive terminal'), `<h4>NIGHTJAR ARCHIVE</h4><p>ACCESS GRANTED.</p><p>RESTRICTED CABINET R-1: <span class="warn">RELEASED</span></p><p>CONTROL (L4): <span class="warn">RELEASED</span></p><p class="dim">Restricted recording: transferred to control, playback deck.</p>`);
         return;
       }
       api.setFlag('archiveTried');
-      const { body, close } = terminal('Archive terminal', `<h4>NIGHTJAR ARCHIVE · RESTRICTED</h4>
+      const { body, close } = terminal(T('Archive terminal'), T`<h4>NIGHTJAR ARCHIVE · RESTRICTED</h4>
         <p>ACCESS REQUIRES WINDOW CODE.</p><p>FORMAT: <b>DDHHMM</b> (day, hour, minute)</p>
         <p class="dim">A yellow sticky note on the screen: “window code = the day they arrive + the time the window opens. DON'T write it down. — E.”</p>
         <div class="dev-row"><button class="btn primary" id="arch-enter">Enter the code</button></div>`);
       body.querySelector('#arch-enter').onclick = () => {
         close();
         api.openKeypad({
-          title: 'Archive terminal · WINDOW CODE (DDHHMM)',
+          title: T('Archive terminal · WINDOW CODE (DDHHMM)'),
           length: 6,
           onSubmit: (code) => {
             if (code === ARCHIVE_CODE) { grantArchive(); return true; }
             codeTries++;
             api.audio.deny();
-            if (codeTries === 2) api.thought('Day, hour, minute. Which day did we arrive? And when did the “window” open?', 4.4);
-            if (codeTries === 4) api.thought('The calendar at the camp: ARRIVAL, the 23rd. The passenger report: the window opened at 02:40.', 5);
+            if (codeTries === 2) api.thought(T('Day, hour, minute. Which day did we arrive? And when did the “window” open?'), 4.4);
+            if (codeTries === 4) api.thought(T('The calendar at the camp: ARRIVAL, the 23rd. The passenger report: the window opened at 02:40.'), 5);
             return false;
           },
         });
@@ -181,33 +182,33 @@ export function createFacilityInteractions(zone, api) {
     api.persist();
     setTimeout(() => {
       zone.sync(api.state);
-      api.thought('ACCESS GRANTED. Behind me, a lock clicks open: the red cabinet. And somewhere further, another door.', 5);
+      api.thought(T('ACCESS GRANTED. Behind me, a lock clicks open: the red cabinet. And somewhere further, another door.'), 5);
       api.checkQuests();
     }, 700);
   }
   add({
     id: 'cabinet', kind: 'pickup', x: FX.cabinet.x - 0.85, z: FX.cabinet.z, radius: 1.3,
     available: () => !has('file31a'),
-    label: () => (flags().archiveAccess ? 'Take the file from the cabinet' : 'Check the red cabinet'),
+    label: () => (flags().archiveAccess ? T('Take the file from the cabinet') : T('Check the red cabinet')),
     use: () => {
-      if (!flags().archiveAccess) { api.audio.deny(); api.thought('Locked. “RESTRICTED — TERMINAL RELEASE ONLY.”', 3.6); return; }
+      if (!flags().archiveAccess) { api.audio.deny(); api.thought(T('Locked. “RESTRICTED — TERMINAL RELEASE ONLY.”'), 3.6); return; }
       if (!api.collect('file31a')) return;
       zone.sync(api.state);
-      api.readDocument('file31a', { onClose: () => { api.thought('OBSERVER. The empty seat next to mine, and the person who watched us from the ridge. The same word.', 5, 0.4); api.checkQuests(); } });
+      api.readDocument('file31a', { onClose: () => { api.thought(T('OBSERVER. The empty seat next to mine, and the person who watched us from the ridge. The same word.'), 5, 0.4); api.checkQuests(); } });
     },
   });
 
   // ------------------------------------------------------------------ control room
-  examine('powerPanel', { x: FX.powerPanel.x, z: -18.85 }, 'Check the power panel', () => (flags().blackout
-    ? '“MAIN: TRIPPED — REMOTE COMMAND.” Remote. Nobody touched this panel. Someone switched the power off from somewhere else.'
-    : 'N-1 power distribution. Every breaker is on, fed from GEN-2 outside. One label is handwritten: “SECONDARY ROOM”.'), 1.4);
+  examine('powerPanel', { x: FX.powerPanel.x, z: -18.85 }, T('Check the power panel'), () => (flags().blackout
+    ? T('“MAIN: TRIPPED — REMOTE COMMAND.” Remote. Nobody touched this panel. Someone switched the power off from somewhere else.')
+    : T('N-1 power distribution. Every breaker is on, fed from GEN-2 outside. One label is handwritten: “SECONDARY ROOM”.')), 1.4);
   add({
     id: 'lockedTerminal', kind: 'machine', x: FX.lockedTerminal.x, z: -18.45, radius: 1.3,
     available: () => true,
-    label: () => 'Use the terminal',
+    label: () => T('Use the terminal'),
     use: () => {
       api.audio.click();
-      terminal('Control terminal · L4', `<h4>NIGHTJAR CONTROL · LEVEL 4</h4><p class="alert">LOCKED</p><p>REMOTE SESSION ACTIVE</p><p>USER: ██████ · ORIGIN: SECONDARY ROOM</p><p class="dim">Someone else is logged in to this terminal. Right now.</p>`);
+      terminal(T('Control terminal · L4'), `<h4>NIGHTJAR CONTROL · LEVEL 4</h4><p class="alert">LOCKED</p><p>REMOTE SESSION ACTIVE</p><p>USER: ██████ · ORIGIN: SECONDARY ROOM</p><p class="dim">Someone else is logged in to this terminal. Right now.</p>`);
     },
   });
 
@@ -230,14 +231,14 @@ export function createFacilityInteractions(zone, api) {
   add({
     id: 'deck', kind: 'machine', x: -16.55, z: FX.deck.z, radius: 1.5,
     available: () => !blackoutRun,
-    label: () => (flags().recordingDone ? 'Check the playback deck' : 'Use the playback deck'),
+    label: () => (flags().recordingDone ? T('Check the playback deck') : T('Use the playback deck')),
     use: () => openDeck(),
   });
   function openDeck() {
     api.audio.click();
     const f = flags();
-    if (f.recordingDone) { api.thought('The tape stopped in the middle of a word. “Phase 3 begins when the subject—”', 4); return; }
-    const { body, close } = terminal('Playback deck · control room', `<h4>RESTRICTED RECORDING · NJ-OBS-2207</h4>
+    if (f.recordingDone) { api.thought(T('The tape stopped in the middle of a word. “Phase 3 begins when the subject—”'), 4); return; }
+    const { body, close } = terminal(T('Playback deck · control room'), T`<h4>RESTRICTED RECORDING · NJ-OBS-2207</h4>
       <div class="lines" id="pb-lines"><p class="dim">Reel loaded. Primary input.</p></div>
       <div class="bar"><i id="pb-bar"></i></div>
       <div id="pb-status" class="dim"></div>
@@ -247,7 +248,7 @@ export function createFacilityInteractions(zone, api) {
     const render = () => {
       const g = flags();
       $('#pb-insert').style.display = g.recordingPart1 && !g.cacheInserted ? '' : 'none';
-      $('#pb-play').textContent = g.cacheInserted ? '▶ Play secondary input' : g.recordingPart1 ? '▶ Play again' : '▶ Play';
+      $('#pb-play').textContent = g.cacheInserted ? T('▶ Play secondary input') : g.recordingPart1 ? T('▶ Play again') : T('▶ Play');
       $('#pb-status').innerHTML = g.cacheInserted ? 'SECONDARY INPUT: CACHE / TAIL · 1 FILE'
         : g.recordingPart1 ? '<span class="warn">DATA ERROR · RECORDING TRUNCATED · REMAINING DATA ON SECONDARY INPUT (CACHE)</span>' : 'PRIMARY INPUT';
     };
@@ -259,7 +260,7 @@ export function createFacilityInteractions(zone, api) {
       zone.sync(api.state);
       api.persist();
       render();
-      api.thought('The memory device from the beach. “CACHE / TAIL”... it fits. A blue light. It was made for this deck.', 4.8);
+      api.thought(T('The memory device from the beach. “CACHE / TAIL”... it fits. A blue light. It was made for this deck.'), 4.8);
     };
     $('#pb-play').onclick = () => {
       if (playback) return;
@@ -276,6 +277,7 @@ export function createFacilityInteractions(zone, api) {
         const p = document.createElement('p');
         p.textContent = l.startsWith('[') ? l : `“${l}”`;
         if (l.startsWith('[')) p.className = 'dim';
+        else if (paTranslation(l)) { const tr = document.createElement('small'); tr.className = 'tr'; tr.textContent = paTranslation(l); p.append(document.createElement('br'), tr); }
         box.appendChild(p);
         const bar = $('#pb-bar');
         if (bar) bar.style.width = `${Math.round(((i + 1) / lines.length) * (second ? 100 : 62))}%`;
@@ -291,7 +293,7 @@ export function createFacilityInteractions(zone, api) {
           api.refresh();
           render();
           $('#pb-play').disabled = false;
-          api.thought('It stops. Cut off. “Remaining data on secondary input”... a cache.', 4.4);
+          api.thought(T('It stops. Cut off. “Remaining data on secondary input”... a cache.'), 4.4);
         } else {
           api.setFlag('recordingDone');
           api.persist();
@@ -313,7 +315,7 @@ export function createFacilityInteractions(zone, api) {
     if (blackoutRun || flags().blackout) return;
     blackoutRun = true;
     api.seq.run([
-      [0.6, () => { quiet = true; api.thought('...Silence. Even the ventilation sounds different.', 3.4); }],
+      [0.6, () => { quiet = true; api.thought(T('...Silence. Even the ventilation sounds different.'), 3.4); }],
       [2.4, () => { P.lockCRT.draw((c, w, h) => { c.fillStyle = '#000'; c.fillRect(0, 0, w, h); for (let i = 0; i < 1500; i++) { c.fillStyle = `rgba(200,255,220,${Math.random() * 0.6})`; c.fillRect(Math.random() * w, Math.random() * h, 2, 1); } }); api.audio.spark(); }],
       [3.0, () => P.deckCRT.off()],
       [3.6, () => { quiet = false; zone.setPower('out'); api.audio.powerDown(); api.flickerFlashlight(0.5); }],
@@ -322,11 +324,11 @@ export function createFacilityInteractions(zone, api) {
         api.audio.emergencyOn();
         zone.sync(api.state);
         api.persist();
-        api.thought(api.player.flashlightOn ? 'Emergency lights. The flashlight still works.' : 'Emergency lights. I need the flashlight. (F)', 3.8);
+        api.thought(api.player.flashlightOn ? T('Emergency lights. The flashlight still works.') : T('Emergency lights. I need the flashlight. (F)'), 3.8);
       }],
       [8.0, () => {
         api.audio.monitorOn();
-        api.thought('A click, somewhere behind me. A screen just came on. In the observation room.', 4.4);
+        api.thought(T('A click, somewhere behind me. A screen just came on. In the observation room.'), 4.4);
         blackoutRun = false;
         api.checkQuests();
       }],
@@ -346,10 +348,10 @@ export function createFacilityInteractions(zone, api) {
       camera.lookAt(screen);
     });
     api.seq.run([
-      [0.2, () => api.thought('The observation room. This room. Live... that is me, standing at this desk.', 4.4)],
+      [0.2, () => api.thought(T('The observation room. This room. Live... that is me, standing at this desk.'), 4.4)],
       [2.0, () => api.audio.sting()],
       [4.4, () => { api.endCinematic(); api.setFlag('watchedSeen'); api.persist(); api.lookToward(obsCamPos, 0.9); }],
-      [5.0, () => api.thought('The camera in the corner. Its red light is on... and it is turning with me.', 4.6)],
+      [5.0, () => api.thought(T('The camera in the corner. Its red light is on... and it is turning with me.'), 4.6)],
       [9.4, () => { watching = false; api.checkQuests(); zone.sync(api.state); }],
     ]);
   }
@@ -472,16 +474,16 @@ export function createFacilityInteractions(zone, api) {
     if (!f.enteredFacility) {
       api.setFlag('enteredFacility');
       api.persist();
-      api.thought('Cold air, old paint, dust... and the lights are on. Somebody keeps this place running.', 4.8, 1.0);
+      api.thought(T('Cold air, old paint, dust... and the lights are on. Somebody keeps this place running.'), 4.8, 1.0);
       api.checkQuests();
     }
     const room = zone.roomAt(px, pz);
     if (room && !seen[room]) {
       seen[room] = true;
       const text = {
-        observation: f.blackout ? null : 'Screens. A whole wall of them. Every one shows a place on the island.',
-        archive: 'Filing cabinets. Years of paper. One drawer is pulled out.',
-        control: 'The control room. A deck with two reels, and a terminal with a red light.',
+        observation: f.blackout ? null : T('Screens. A whole wall of them. Every one shows a place on the island.'),
+        archive: T('Filing cabinets. Years of paper. One drawer is pulled out.'),
+        control: T('The control room. A deck with two reels, and a terminal with a red light.'),
       }[room];
       if (text && !f[room + 'Seen']) { api.setFlag(room + 'Seen'); api.thought(text, 4); }
     }
@@ -496,6 +498,6 @@ export function createFacilityInteractions(zone, api) {
     void q;
   };
   zone.onEnter = (from) => {
-    if (from === 'ridge' && flags().enteredFacility) api.thought(flags().blackout ? 'Red light, and the hum of the emergency power.' : 'Back inside N-1.', 3, 0.8);
+    if (from === 'ridge' && flags().enteredFacility) api.thought(flags().blackout ? T('Red light, and the hum of the emergency power.') : T('Back inside N-1.'), 3, 0.8);
   };
 }

@@ -11,6 +11,7 @@ import { FL, FPATHS, PRINTS } from './zones/forest/layout.js';
 import { streamZ } from './zones/forest/terrain.js';
 import { RL, RPATH, RCABLE } from './zones/ridge/layout.js';
 import { ROOMS, FX } from './zones/facility/layout.js';
+import { T, RTL, paTranslation } from './i18n/index.js';
 
 const $ = (id) => document.getElementById(id);
 const descOf = (c, state) => (typeof c.desc === 'function' ? c.desc(state) : c.desc);
@@ -59,8 +60,8 @@ export class UI {
     if (info.goal) $('quest-goal').textContent = info.goal;
     const first = PART_START[quest.part];
     $('quest-num').textContent = quest.final
-      ? `Part ${quest.part} · coming soon`
-      : `Part ${quest.part} · Mission ${index - first + 1} / ${PART_SIZES[quest.part]}`;
+      ? T`Part ${quest.part} · coming soon`
+      : T`Part ${quest.part} · Mission ${index - first + 1} / ${PART_SIZES[quest.part]}`;
     $('quest-title').textContent = quest.title;
     const obj = $('quest-obj');
     obj.innerHTML = '';
@@ -97,7 +98,7 @@ export class UI {
     if (angle === null) { m.classList.add('hidden'); return; }
     m.classList.remove('hidden');
     $('marker-arrow').style.transform = `rotate(${angle}rad)`;
-    $('marker-dist').textContent = dist != null ? `${Math.round(dist)} m` : '';
+    $('marker-dist').textContent = dist != null ? T`${Math.round(dist)} m` : '';
   }
 
   // HUD bar: tools the player always carries, then the bag (with quantities)
@@ -108,7 +109,7 @@ export class UI {
     const cell = (id, qty, isKey) => {
       const d = document.createElement('div');
       d.className = 'inv' + (isKey ? ' key' : '') + (id === 'flashlight' && flashlightOn ? ' on' : '') + (id === justAdded ? ' new' : '');
-      const lbl = id === 'booklet' ? 'Booklet · J' : id === 'flashlight' ? 'Flashlight · F' : ITEMS[id].name;
+      const lbl = id === 'booklet' ? T('Booklet · J') : id === 'flashlight' ? T('Flashlight · F') : ITEMS[id].name;
       d.innerHTML = (ICONS[id] || ICONS.document) + `<span class="lbl">${lbl}</span>` + (qty > 1 ? `<span class="qty">${qty}</span>` : '');
       d.title = ITEMS[id].name;
       inv.appendChild(d);
@@ -118,7 +119,7 @@ export class UI {
     if (bag && Object.keys(bag.items).length) {
       const sep = document.createElement('div');
       sep.className = 'inv-sep';
-      sep.textContent = `Bag ${slotsUsed(bag)}/${bag.slots}`;
+      sep.textContent = T`Bag ${slotsUsed(bag)}/${bag.slots}`;
       inv.appendChild(sep);
       for (const [id, q] of Object.entries(bag.items)) cell(id, q, false);
     }
@@ -130,7 +131,7 @@ export class UI {
     $('storage-title').textContent = title;
     const msg = $('storage-msg');
     const say = (text, kind = '') => { msg.textContent = text; msg.className = 'storage-msg ' + kind; };
-    say('Click moves a whole stack · Shift+click moves one item');
+    say(T('Click moves a whole stack · Shift+click moves one item'));
     const grid = (container, side) => {
       const list = stacks(container);
       let html = '';
@@ -145,12 +146,12 @@ export class UI {
       return html;
     };
     const render = () => {
-      $('bag-cap').textContent = `${slotsUsed(bag)}/${bag.slots} slots`;
-      $('chest-cap').textContent = `${slotsUsed(chest)}/${chest.slots} slots`;
+      $('bag-cap').textContent = T`${slotsUsed(bag)}/${bag.slots} slots`;
+      $('chest-cap').textContent = T`${slotsUsed(chest)}/${chest.slots} slots`;
       $('bag-grid').innerHTML = grid(bag, 'bag');
       $('chest-grid').innerHTML = grid(chest, 'chest');
       $('key-items').innerHTML = keyItems.length
-        ? keyItems.map((id) => `<span class="key-item">${ICONS[id] || ''}<span>${ITEMS[id].name}</span></span>`).join('') + '<span class="key-note">Key items stay with me</span>'
+        ? keyItems.map((id) => `<span class="key-item">${ICONS[id] || ''}<span>${ITEMS[id].name}</span></span>`).join('') + T('<span class="key-note">Key items stay with me</span>')
         : '';
       $('store-all').disabled = !Object.keys(bag.items).some((id) => ITEMS[id].kind === 'resource');
       el.querySelectorAll('.slot[data-id]').forEach((b) => {
@@ -162,12 +163,12 @@ export class UI {
       const dir = side === 'bag' ? 'toChest' : 'toBag';
       const r = move(dir, id, qty);
       const name = ITEMS[id] ? ITEMS[id].name : '';
-      const where = dir === 'toChest' ? 'the chest' : 'my bag';
+      const where = dir === 'toChest' ? T('the chest') : T('my bag');
       if (r.reason === 'ok') say(`${name} ×${r.moved} → ${where}`, 'ok');
-      else if (r.reason === 'partial') say(`Moved only ${r.moved}: ${where} is full.`, 'warn');
-      else if (r.reason === 'full') say(`${where[0].toUpperCase() + where.slice(1)} is full. No room for ${name}.`, 'warn');
-      else if (r.reason === 'none') say('Nothing to move.', 'warn');
-      else say('That can\'t be moved.', 'warn');
+      else if (r.reason === 'partial') say(T`Moved only ${r.moved}: ${where} is full.`, 'warn');
+      else if (r.reason === 'full') say(T`${where[0].toUpperCase() + where.slice(1)} is full. No room for ${name}.`, 'warn');
+      else if (r.reason === 'none') say(T('Nothing to move.'), 'warn');
+      else say(T('That can\'t be moved.'), 'warn');
       render();
       return r;
     };
@@ -178,7 +179,7 @@ export class UI {
         moved += r.moved;
         if (r.reason === 'full' || r.reason === 'partial') blocked = true;
       }
-      say(blocked ? `Moved ${moved}: the chest is full.` : `All resources stored (${moved}).`, blocked ? 'warn' : 'ok');
+      say(blocked ? T`Moved ${moved}: the chest is full.` : T`All resources stored (${moved}).`, blocked ? 'warn' : 'ok');
       render();
     };
     const close = () => { el.classList.add('hidden'); window.removeEventListener('keydown', onKey, true); this.storageMove = null; onClose && onClose(); };
@@ -198,7 +199,7 @@ export class UI {
     const el = $('workbench');
     const ids = ['wood', 'rope', 'cloth', 'battery', 'electronics'];
     $('bench-materials').innerHTML = ids.map((id) => `<div class="mat"><span class="slot-ico">${ICONS[id]}</span><span>${ITEMS[id].name}</span><b>${materials[id] || 0}</b></div>`).join('');
-    $('bench-recipes').textContent = recipes.length ? '' : 'I have no blueprints to build from yet. Maybe I will find some at the research camp, or elsewhere on the island.';
+    $('bench-recipes').textContent = recipes.length ? '' : T('I have no blueprints to build from yet. Maybe I will find some at the research camp, or elsewhere on the island.');
     const close = () => { el.classList.add('hidden'); window.removeEventListener('keydown', onKey, true); onClose && onClose(); };
     const onKey = (e) => { if (e.code === 'Escape' || e.code === 'KeyE') { close(); e.stopPropagation(); e.preventDefault(); } };
     $('bench-close').onclick = close;
@@ -224,8 +225,8 @@ export class UI {
     const t = document.createElement('div');
     t.className = 'toast discovery';
     t.style.setProperty('--life', '6s');
-    t.innerHTML = '<b></b><span></span><small>Added to the booklet · J</small>';
-    t.querySelector('b').textContent = `New clue · ${title}`;
+    t.innerHTML = T('<b></b><span></span><small>Added to the booklet · J</small>');
+    t.querySelector('b').textContent = T`New clue · ${title}`;
     t.querySelector('span').textContent = learned || '';
     $('toasts').appendChild(t);
     setTimeout(() => t.remove(), 6600);
@@ -254,6 +255,7 @@ export class UI {
     const span = document.createElement('span');
     span.className = 'sub ' + kind;
     span.textContent = text;
+    if (!translation && kind === 'pa') translation = paTranslation(text);
     if (translation) { const tr = document.createElement('span'); tr.className = 'tr'; tr.textContent = translation; span.appendChild(tr); }
     el.innerHTML = '';
     el.appendChild(span);
@@ -309,29 +311,29 @@ export class UI {
       const info = QUEST_INFO[q.id] || {};
       const esc = (t) => String(t).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
       const done = QUESTS.slice(0, i).filter((x) => x.part === q.part).map((x) => `<span>${esc(x.title)}</span>`).join('<br>');
-      R.innerHTML = `<h3>Goal</h3>
+      R.innerHTML = T`<h3>Goal</h3>
         <div class="case-goal">${esc(mainGoal(state))}</div>
         <div class="case-block"><h4>Current mission · ${esc(q.title)}</h4><p class="case-now">${esc(info.objective ? info.objective(state) : q.objective)}</p></div>
         <div class="case-block"><h4>Why it matters</h4><p>${esc(info.why || '')}</p></div>
-        ${done ? `<div class="case-block"><h4>What I have done</h4><div class="case-done">${done}</div></div>` : ''}`;
+        ${done ? T`<div class="case-block"><h4>What I have done</h4><div class="case-done">${done}</div></div>` : ''}`;
       const know = info.know ? info.know(state) : [];
-      L.innerHTML = `<h3>What I know</h3>
+      L.innerHTML = T`<h3>What I know</h3>
         <div class="case-block"><ul>${know.map((k) => `<li>${esc(k)}</li>`).join('')}</ul></div>
         <div class="case-block"><h4>Still to find out</h4><p class="char-note" style="margin-top:0">${esc(info.question || '')}</p></div>
-        ${q.hints && q.hints.length ? '<div class="case-block"><p class="empty">Stuck? H gives a hint. Each press is clearer.</p></div>' : ''}`;
+        ${q.hints && q.hints.length ? T('<div class="case-block"><p class="empty">Stuck? H gives a hint. Each press is clearer.</p></div>') : ''}`;
     } else if (this.journalTab === 'message') {
       R.innerHTML = `<div class="cover">${SYMBOL_SVG}<div class="cover-note">— — — —</div></div>`;
-      L.innerHTML = `<h3>The first page</h3>
+      L.innerHTML = T`<h3>The first page</h3>
         <div class="handwritten-en">${BOOKLET_MESSAGE}</div>
         <div class="char-note">The handwriting of someone in a hurry. Nobody was supposed to read this... except the people who planned something.</div>
         <div class="char-note">And this symbol: I am sure I saw it today. But where?</div>`;
     } else if (this.journalTab === 'clues') {
       const found = CLUES.filter((c) => state.clues.includes(c.id));
       if (!this.selectedClue || !state.clues.includes(this.selectedClue)) this.selectedClue = found.length ? found[found.length - 1].id : null;
-      let html = '<h3>Clues found</h3><div class="clue-list">';
+      let html = T('<h3>Clues found</h3><div class="clue-list">');
       for (const part of [1, 2, 3]) {
         if (state.questIndex < PART_START[part]) break;
-        html += `<div class="clue-part">Part ${part} · ${PART_TITLES[part]}</div>`;
+        html += T`<div class="clue-part">Part ${part} · ${PART_TITLES[part]}</div>`;
         for (const c of CLUES.filter((x) => x.part === part)) {
           if (state.clues.includes(c.id)) {
             const isNew = !this.seenClues.has(c.id);
@@ -339,12 +341,12 @@ export class UI {
             const short = plain.length > 46 ? plain.slice(0, 46) + '…' : plain;
             html += `<button class="clue ${c.id === this.selectedClue ? 'sel' : ''} ${isNew ? 'new' : ''}" data-clue="${c.id}"><span class="ico">${ICONS[c.id] || ICONS.document}</span><span class="txt"><span class="t">${c.title}</span><span class="s">${short}</span></span></button>`;
           } else {
-            html += `<div class="clue locked"><span class="ico">${ICONS.lock}</span><span class="txt"><span class="t">A clue not found yet</span><span class="s">???</span></span></div>`;
+            html += T`<div class="clue locked"><span class="ico">${ICONS.lock}</span><span class="txt"><span class="t">A clue not found yet</span><span class="s">???</span></span></div>`;
           }
         }
       }
       for (let i = 0; i < LOCKED_FUTURE_SLOTS; i++) {
-        html += `<div class="clue locked"><span class="ico">${ICONS.lock}</span><span class="txt"><span class="t">Locked page</span><span class="s">Part of the booklet is still stuck together from the water…</span></span></div>`;
+        html += T`<div class="clue locked"><span class="ico">${ICONS.lock}</span><span class="txt"><span class="t">Locked page</span><span class="s">Part of the booklet is still stuck together from the water…</span></span></div>`;
       }
       html += '</div>';
       R.innerHTML = html;
@@ -353,55 +355,55 @@ export class UI {
         this.seenClues.add(sel.id);
         const note = sel.noteEn ? `<div class="handwritten-en final">${sel.note}</div>` : `<div class="char-note">${sel.note}</div>`;
         L.innerHTML = `<h3>${sel.title}</h3>${sel.art || ''}<div class="detail-desc">${descOf(sel, state)}</div>${note}`;
-      } else L.innerHTML = '<h3>Details</h3><p class="empty">No clues found yet.</p>';
+      } else L.innerHTML = T('<h3>Details</h3><p class="empty">No clues found yet.</p>');
       R.querySelectorAll('[data-clue]').forEach((b) => b.addEventListener('click', () => { this.selectedClue = b.dataset.clue; this.renderJournal(state, playerPos); }));
     } else if (this.mapView(state) === 'north') {
       const inside = state.zone === 'facility';
-      R.innerHTML = `${this.mapSwitch(state)}<h3>${inside ? 'N-1: the facility' : 'The northern ridge'}</h3><div class="mapwrap">${inside ? this.facilityMapSVG(state, playerPos) : this.ridgeMapSVG(state, state.zone === 'ridge' ? playerPos : null)}</div>`;
+      R.innerHTML = `${this.mapSwitch(state)}<h3>${inside ? T('N-1: the facility') : T('The northern ridge')}</h3><div class="mapwrap">${inside ? this.facilityMapSVG(state, playerPos) : this.ridgeMapSVG(state, state.zone === 'ridge' ? playerPos : null)}</div>`;
       const f = state.flags;
-      const lines = ['<div><span class="k" style="color:#1d4f8a">●</span> My location</div>'];
+      const lines = [T('<div><span class="k" style="color:#1d4f8a">●</span> My location</div>')];
       if (inside) {
-        lines.push('<div><span class="k">↓</span> The way out, to the ridge</div>');
-        if (f.archiveAccess) lines.push('<div><span class="k">▪</span> Restricted cabinet (archive)</div>');
-        if (f.controlReleased) lines.push('<div><span class="k">▪</span> Control room: the playback deck</div>');
-        if (f.blackout) lines.push('<div><span class="k" style="color:#c0392b">●</span> Emergency power only</div>');
+        lines.push(T('<div><span class="k">↓</span> The way out, to the ridge</div>'));
+        if (f.archiveAccess) lines.push(T('<div><span class="k">▪</span> Restricted cabinet (archive)</div>'));
+        if (f.controlReleased) lines.push(T('<div><span class="k">▪</span> Control room: the playback deck</div>'));
+        if (f.blackout) lines.push(T('<div><span class="k" style="color:#c0392b">●</span> Emergency power only</div>'));
       } else {
-        lines.push('<div><span class="k">↓</span> The trail from the forest</div>');
-        lines.push('<div><span class="k" style="color:#c0392b">●</span> The red signal, on the cliff</div>');
-        if (f.entranceFound) lines.push('<div><span class="k">▮</span> The door in the cliff: N-1</div>');
-        if (f.genSeen) lines.push('<div><span class="k">▪</span> Generator shed, GEN-2</div>');
-        if (state.collected.includes('mapFragment')) lines.push('<div><span class="k">✕</span> “N-1” on the missing map piece</div>');
+        lines.push(T('<div><span class="k">↓</span> The trail from the forest</div>'));
+        lines.push(T('<div><span class="k" style="color:#c0392b">●</span> The red signal, on the cliff</div>'));
+        if (f.entranceFound) lines.push(T('<div><span class="k">▮</span> The door in the cliff: N-1</div>'));
+        if (f.genSeen) lines.push(T('<div><span class="k">▪</span> Generator shed, GEN-2</div>'));
+        if (state.collected.includes('mapFragment')) lines.push(T('<div><span class="k">✕</span> “N-1” on the missing map piece</div>'));
       }
-      L.innerHTML = `<h3>Legend</h3><div class="legend">${lines.join('')}</div>
-        <div class="char-note">${inside ? 'I sketched the rooms as I found them. The door to the lower level is sealed.' : 'A narrow valley between rock walls. The only way is up the trail, toward the cliff.'}</div>`;
+      L.innerHTML = T`<h3>Legend</h3><div class="legend">${lines.join('')}</div>
+        <div class="char-note">${inside ? T('I sketched the rooms as I found them. The door to the lower level is sealed.') : T('A narrow valley between rock walls. The only way is up the trail, toward the cliff.')}</div>`;
       this.bindMapSwitch(state, playerPos);
     } else if (this.mapView(state) === 'forest') {
-      R.innerHTML = `${this.mapSwitch(state)}<h3>The forest: what I have seen so far</h3><div class="mapwrap">${this.forestMapSVG(state, state.zone === 'forest' ? playerPos : null)}</div>`;
+      R.innerHTML = T`${this.mapSwitch(state)}<h3>The forest: what I have seen so far</h3><div class="mapwrap">${this.forestMapSVG(state, state.zone === 'forest' ? playerPos : null)}</div>`;
       const f = state.flags;
-      const lines = ['<div><span class="k" style="color:#1d4f8a">●</span> My location</div>', '<div><span class="k">↓</span> The trail from the beach</div>'];
-      if (f.reachedTransmitter) lines.push('<div><span class="k">⌇</span> The transmitter (RELAY 04 · 417.9)</div>');
-      if (f.printsPower || has('powerCell') || f.powerInstalled) lines.push('<div><span class="k">▪</span> The supply crate</div>');
-      if (f.campRadio || f.tentSeen || f.tableSeen || f.cabinSeen) lines.push('<div><span class="k">⌂</span> The research camp</div>');
-      if (f.postSpotted || f.printsRidge || has('routeChart')) lines.push('<div><span class="k">◭</span> The lookout on the ridge</div>');
-      if (f.endingSeen) lines.push('<div><span class="k" style="color:#c0392b">●</span> The new signal, north-east</div>');
-      L.innerHTML = `<h3>Legend</h3><div class="legend">${lines.join('')}</div>
+      const lines = [T('<div><span class="k" style="color:#1d4f8a">●</span> My location</div>'), T('<div><span class="k">↓</span> The trail from the beach</div>')];
+      if (f.reachedTransmitter) lines.push(T('<div><span class="k">⌇</span> The transmitter (RELAY 04 · 417.9)</div>'));
+      if (f.printsPower || has('powerCell') || f.powerInstalled) lines.push(T('<div><span class="k">▪</span> The supply crate</div>'));
+      if (f.campRadio || f.tentSeen || f.tableSeen || f.cabinSeen) lines.push(T('<div><span class="k">⌂</span> The research camp</div>'));
+      if (f.postSpotted || f.printsRidge || has('routeChart')) lines.push(T('<div><span class="k">◭</span> The lookout on the ridge</div>'));
+      if (f.endingSeen) lines.push(T('<div><span class="k" style="color:#c0392b">●</span> The new signal, north-east</div>'));
+      L.innerHTML = T`<h3>Legend</h3><div class="legend">${lines.join('')}</div>
         <div class="char-note">I drew this myself by flashlight. The ridge in the east is steep: there is only one way up, south of the camp.</div>`;
       this.bindMapSwitch(state, playerPos);
     } else {
-      R.innerHTML = `${this.mapSwitch(state)}<h3>Partial map of the island</h3><div class="mapwrap">${this.mapSVG(state, state.zone === 'beach' ? playerPos : null)}</div>`;
+      R.innerHTML = T`${this.mapSwitch(state)}<h3>Partial map of the island</h3><div class="mapwrap">${this.mapSVG(state, state.zone === 'beach' ? playerPos : null)}</div>`;
       this.bindMapSwitch(state, playerPos);
       const lines = [
-        '<div><span class="k" style="color:#1d4f8a">●</span> My location</div>',
-        '<div><span class="k">✈</span> The fuselage</div>',
+        T('<div><span class="k" style="color:#1d4f8a">●</span> My location</div>'),
+        T('<div><span class="k">✈</span> The fuselage</div>'),
       ];
       if (state.questIndex >= 4) {
-        lines.push(`<div><span class="k">✕</span> Booklet marks ${has('ticket') && has('device') ? '(checked)' : ''}</div>`);
+        lines.push(T`<div><span class="k">✕</span> Booklet marks ${has('ticket') && has('device') ? T('(checked)') : ''}</div>`);
       }
-      if (has('device')) lines.push('<div><span class="k">T</span> TAIL: the plane\'s tail</div>');
-      if (state.questIndex >= 6) lines.push('<div><span class="k">?</span> Signal source: deep in the forest, via the north trail</div>');
-      L.innerHTML = `<h3>Legend</h3><div class="legend">${lines.join('')}</div>
+      if (has('device')) lines.push(T('<div><span class="k">T</span> TAIL: the plane\'s tail</div>'));
+      if (state.questIndex >= 6) lines.push(T('<div><span class="k">?</span> Signal source: deep in the forest, via the north trail</div>'));
+      L.innerHTML = T`<h3>Legend</h3><div class="legend">${lines.join('')}</div>
         <div class="char-note">The map is torn. The northern part is missing, as if someone ripped it off on purpose.</div>
-        ${state.questIndex >= 4 ? '<div class="char-note">Two X marks in red pen: near the west beach and near the jungle trail.</div>' : ''}`;
+        ${state.questIndex >= 4 ? T('<div class="char-note">Two X marks in red pen: near the west beach and near the jungle trail.</div>') : ''}`;
     }
   }
 
@@ -415,8 +417,8 @@ export class UI {
   mapSwitch(state) {
     if (state.questIndex < 7 && state.zone !== 'forest') return '';
     const v = this.mapView(state);
-    const north = state.flags.reachedRidge ? `<button data-map="north" class="${v === 'north' ? 'on' : ''}">North</button>` : '';
-    return `<div class="map-switch"><button data-map="beach" class="${v === 'beach' ? 'on' : ''}">Beach</button><button data-map="forest" class="${v === 'forest' ? 'on' : ''}">Forest</button>${north}</div>`;
+    const north = state.flags.reachedRidge ? T`<button data-map="north" class="${v === 'north' ? 'on' : ''}">North</button>` : '';
+    return T`<div class="map-switch"><button data-map="beach" class="${v === 'beach' ? 'on' : ''}">Beach</button><button data-map="forest" class="${v === 'forest' ? 'on' : ''}">Forest</button>${north}</div>`;
   }
 
   ridgeMapSVG(state, playerPos) {
@@ -567,7 +569,7 @@ export class UI {
 
   // a found document, readable at any size (the panel scrolls)
   openDocument({ title, html, onClose }) {
-    this.openDevice(title, `<div class="doc-paper">${html}</div><p class="dev-note">Added to the booklet (J → Clues). E or Esc to close.</p>`, () => { $('device').classList.remove('doc'); onClose && onClose(); });
+    this.openDevice(title, T`<div class="doc-paper">${html}</div><p class="dev-note">Added to the booklet (J → Clues). E or Esc to close.</p>`, () => { $('device').classList.remove('doc'); onClose && onClose(); });
     $('device').classList.add('doc');
   }
 
@@ -581,9 +583,9 @@ export class UI {
   // three dials of symbols; check(codeArray) -> bool
   openSymbolLock({ symbols, size, check, onClose }) {
     const pos = Array(size).fill(0);
-    const close = this.openDevice('Symbol lock', `
+    const close = this.openDevice(T('Symbol lock'), T`
       <p class="dev-note">Three wheels. Six symbols on each wheel.</p>
-      <div class="dials" dir="ltr">${pos.map((_, i) => `
+      <div class="dials" dir="ltr">${pos.map((_, i) => T`
         <div class="dial" data-i="${i}">
           <button class="dial-btn" data-step="-1" aria-label="Previous symbol">▲</button>
           <div class="dial-face" id="dial-${i}"></div>
@@ -598,7 +600,7 @@ export class UI {
     const attempt = () => {
       const ok = check(pos.map((p) => symbols[p].id));
       const msg = $('dev-msg');
-      msg.textContent = ok ? 'Click. The lock opens.' : 'The lock doesn\'t move.';
+      msg.textContent = ok ? T('Click. The lock opens.') : T('The lock doesn\'t move.');
       msg.className = 'dev-msg ' + (ok ? 'ok' : 'bad');
       if (ok) setTimeout(close, 700);
     };
@@ -608,16 +610,16 @@ export class UI {
   }
 
   // connect four wires to four terminals; check(assign) -> bool
-  openWiring({ wires, rules, check, onClose, title = 'Wiring panel · RELAY 04', cardTitle = 'Service card' }) {
+  openWiring({ wires, rules, check, onClose, title = T('Wiring panel · RELAY 04'), cardTitle = T('Service card') }) {
     const assign = {};
     let picked = null;
-    const close = this.openDevice(title, `
+    const close = this.openDevice(title, T`
       <div class="wiring">
         <div class="wire-col">${wires.map((w) => `<button class="wire" data-w="${w.id}" style="--c:${w.color}"><span class="plug"></span>${w.name}</button>`).join('')}</div>
         <svg class="wire-svg" viewBox="0 0 100 200" preserveAspectRatio="none" aria-hidden="true"></svg>
         <div class="term-col">${[1, 2, 3, 4].map((t) => `<button class="term" data-t="${t}">${t}</button>`).join('')}</div>
       </div>
-      <div class="card">${rules ? `<b>${cardTitle}:</b><br>` + rules.map((r, i) => `${i + 1}. ${r}`).join('<br>') : 'I have no diagram.'}</div>
+      <div class="card">${rules ? `<b>${cardTitle}:</b><br>` + rules.map((r, i) => `${i + 1}. ${r}`).join('<br>') : T('I have no diagram.')}</div>
       <div class="dev-row"><button id="wire-clear" class="btn ghost">Disconnect all</button><button id="wire-try" class="btn primary">Power on</button></div>
       <div id="dev-msg" class="dev-msg" aria-live="polite">Pick a wire, then a terminal.</div>`, onClose);
     const body = $('device-body');
@@ -631,7 +633,9 @@ export class UI {
       const idx = (id) => wires.findIndex((w) => w.id === id);
       body.querySelector('.wire-svg').innerHTML = Object.entries(assign).map(([w, t]) => {
         const y1 = 25 + idx(w) * 50, y2 = 25 + (t - 1) * 50;
-        return `<path d="M0 ${y1} C45 ${y1} 55 ${y2} 100 ${y2}" stroke="${wires[idx(w)].color}" stroke-width="5" fill="none" vector-effect="non-scaling-stroke"/>`;
+        // from the wire label to the terminal: labels are on the left in English, on the right in Hebrew
+        const [a, b, c, d] = RTL ? [100, 55, 45, 0] : [0, 45, 55, 100];
+        return `<path d="M${a} ${y1} C${b} ${y1} ${c} ${y2} ${d} ${y2}" stroke="${wires[idx(w)].color}" stroke-width="5" fill="none" vector-effect="non-scaling-stroke"/>`;
       }).join('');
     };
     body.querySelectorAll('.wire').forEach((b) => { b.onclick = () => { picked = b.dataset.w; render(); }; });
@@ -648,9 +652,9 @@ export class UI {
     $('wire-clear').onclick = () => { for (const k of Object.keys(assign)) delete assign[k]; render(); };
     const attempt = () => {
       const msg = $('dev-msg');
-      if (Object.keys(assign).length < wires.length) { msg.textContent = 'Not all wires are connected.'; msg.className = 'dev-msg bad'; return false; }
+      if (Object.keys(assign).length < wires.length) { msg.textContent = T('Not all wires are connected.'); msg.className = 'dev-msg bad'; return false; }
       const ok = check({ ...assign });
-      msg.textContent = ok ? 'A hum. The screen lights up.' : 'A spark, then silence. Something is wrong.';
+      msg.textContent = ok ? T('A hum. The screen lights up.') : T('A spark, then silence. Something is wrong.');
       msg.className = 'dev-msg ' + (ok ? 'ok' : 'bad');
       if (ok) setTimeout(close, 800);
       return ok;
@@ -663,7 +667,7 @@ export class UI {
   // tune by ear (and by the signal meter): hold the dial on the station for a moment
   openTuning({ min, max, target, lock, hold, onLocked, onClose, tuner }) {
     let f = 405.0, held = 0, last = performance.now(), done = false;
-    const close = this.openDevice('Frequency tuning', `
+    const close = this.openDevice(T('Frequency tuning'), T`
       <div class="tuner">
         <div class="freq" dir="ltr"><span id="tune-f"></span> <small>MHz</small></div>
         <div class="meter" id="tune-meter" aria-label="Signal strength">${'<i></i>'.repeat(10)}</div>
@@ -698,11 +702,11 @@ export class UI {
         if (Math.abs(f - target) <= lock + 1e-9) {
           held += dt;
           const msg = $('dev-msg');
-          msg.textContent = 'A voice... through the static. Hold it.';
+          msg.textContent = T('A voice... through the static. Hold it.');
           msg.className = 'dev-msg ok';
           if (held >= hold) {
             done = true;
-            msg.textContent = 'Locked on.';
+            msg.textContent = T('Locked on.');
             onLocked();
             setTimeout(close, 900);
           }

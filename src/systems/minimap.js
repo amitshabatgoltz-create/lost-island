@@ -12,6 +12,7 @@
 //     landmarks: [{ x, z, label, kind, far, found(state) }], // shown once found(state) is true
 //   }
 // The baked picture is cached per zone id, so walking back and forth between zones costs nothing.
+import { T } from '../i18n/index.js';
 
 const PX = 3; // baked picture: pixels per metre
 const VIEW = 42; // metres from the centre of the minimap to its rim (a zone can set its own `view`)
@@ -148,7 +149,7 @@ export class BigMap {
     el.id = 'bigmap';
     el.className = 'screen hidden';
     el.innerHTML = '<div class="bigmap-frame"><div class="bigmap-title"></div><canvas></canvas>'
-      + '<div class="bigmap-foot"><span><kbd>M</kbd> / <kbd>Esc</kbd> close</span><span class="bigmap-scale"></span></div></div>';
+      + T('<div class="bigmap-foot"><span><kbd>M</kbd> / <kbd>Esc</kbd> close</span><span class="bigmap-scale"></span></div></div>');
     document.body.appendChild(el);
     this.el = el;
     this.canvas = el.querySelector('canvas');
@@ -233,7 +234,7 @@ export class BigMap {
 
     // scale bar: a round number of metres about 80 px long
     const metres = [5, 10, 20, 25, 50, 100].find((m) => m * k >= 70) || 100;
-    this.el.querySelector('.bigmap-scale').innerHTML = `<i style="width:${Math.round(metres * k)}px"></i>${metres} m`;
+    this.el.querySelector('.bigmap-scale').innerHTML = T`<i style="width:${Math.round(metres * k)}px"></i>${metres} m`;
   }
 
   // keep it sharp when the window changes size

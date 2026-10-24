@@ -8,6 +8,7 @@ import { heightAt as terrainHeight } from './terrain.js';
 import { ITEMS } from '../../data/items.js';
 import { addResourceNodes } from '../resources.js';
 import { CARVINGS, CRATE_CODE, SYMBOLS, symbolName, WIRES, WIRING_RULES, WIRING_SOLUTION, TUNE, LOCKER_CODE } from '../../data/puzzles.js';
+import { T } from '../../i18n/index.js';
 const rot2 = (lx, lz, r) => ({ x: lx * Math.cos(r) + lz * Math.sin(r), z: -lx * Math.sin(r) + lz * Math.cos(r) });
 const front = (p, d) => { const o = rot2(0, d, p.rot || 0); return { x: p.x + o.x, z: p.z + o.z }; };
 
@@ -33,12 +34,12 @@ export function createForestInteractions(zone, api) {
     label: () => {
       const f = flags();
       if (!f.powerInstalled) {
-        if (f.wired) return 'Tune the frequency';
-        if (f.cellInserted) return 'Open the wiring panel';
-        return has('powerCell') ? 'Insert the power cell' : 'Check the transmitter';
+        if (f.wired) return T('Tune the frequency');
+        if (f.cellInserted) return T('Open the wiring panel');
+        return has('powerCell') ? T('Insert the power cell') : T('Check the transmitter');
       }
-      if (q() === 14) return 'Listen to the broadcast';
-      return 'Check the transmitter';
+      if (q() === 14) return T('Listen to the broadcast');
+      return T('Check the transmitter');
     },
     use: () => {
       const f = flags();
@@ -48,12 +49,12 @@ export function createForestInteractions(zone, api) {
         if (has('powerCell')) return insertCell();
         api.audio.click();
         api.setFlag('transmitterInspected');
-        api.thought('The transmitter is dead. The power cell slot is empty and its door is open. On the panel: RELAY 04. And in the mud around it: tracks.', 5.5);
+        api.thought(T('The transmitter is dead. The power cell slot is empty and its door is open. On the panel: RELAY 04. And in the mud around it: tracks.'), 5.5);
         return;
       }
       if (q() === 14) return startEnding();
       api.audio.click();
-      api.thought(f.endingSeen ? 'The transmitter is silent. The display reads LINK: LOST.' : 'The transmitter hums on 417.9. Nobody answers.', 3.5);
+      api.thought(f.endingSeen ? T('The transmitter is silent. The display reads LINK: LOST.') : T('The transmitter hums on 417.9. Nobody answers.'), 3.5);
     },
   });
 
@@ -64,7 +65,7 @@ export function createForestInteractions(zone, api) {
     zone.sync(api.state);
     api.refresh();
     api.persist();
-    api.thought('The cell clicks into place. Nothing. Behind the panel: four loose wires.', 4.5, 0.6);
+    api.thought(T('The cell clicks into place. Nothing. Behind the panel: four loose wires.'), 4.5, 0.6);
   }
 
   function openWiring() {
@@ -81,7 +82,7 @@ export function createForestInteractions(zone, api) {
         zone.sync(api.state);
         api.refresh();
         api.persist();
-        api.thought('The screen lights up. Only static. It is searching for something.', 4, 0.8);
+        api.thought(T('The screen lights up. Only static. It is searching for something.'), 4, 0.8);
         return true;
       },
     });
@@ -99,7 +100,7 @@ export function createForestInteractions(zone, api) {
           [1.0, () => api.audio.radio(4.5)],
           [1.3, () => api.subtitle('“...Nightjar relay... no civilian contact... observer remains on the ridge... [static]”', 'pa', '', 5)],
           [2.6, () => { api.collect('radioLog'); }],
-          [6.6, () => { busy = false; api.thought('The transmitter printed its log. And it broadcast something about a camp.', 4.5); api.checkQuests(); }],
+          [6.6, () => { busy = false; api.thought(T('The transmitter printed its log. And it broadcast something about a camp.'), 4.5); api.checkQuests(); }],
         ]);
       },
     });
@@ -118,16 +119,16 @@ export function createForestInteractions(zone, api) {
     id: 'powerCell', kind: 'pickup', obj: cellMesh, glint: cellGlint, x: FL.powerCell.x, z: FL.powerCell.z, radius: 2.0,
     available: () => crateOpen() && !has('powerCell') && !flags().powerInstalled,
     visible: () => crateOpen() && !has('powerCell') && !flags().powerInstalled,
-    label: () => `Pick up: ${ITEMS.powerCell.name}`,
-    use: () => { if (api.collect('powerCell')) api.thought('48 volts, with the same symbol. Someone took it out of the transmitter and locked it in here.', 4.5, 0.6); },
+    label: () => T`Pick up: ${ITEMS.powerCell.name}`,
+    use: () => { if (api.collect('powerCell')) api.thought(T('48 volts, with the same symbol. Someone took it out of the transmitter and locked it in here.'), 4.5, 0.6); },
   });
   let lockTries = 0;
   add({
     id: 'supplyDrop', kind: 'container', x: FL.powerCell.x, z: FL.powerCell.z, radius: 2.0,
     available: () => !crateOpen(),
-    label: () => 'Lock with three symbols',
+    label: () => T('Lock with three symbols'),
     use: () => {
-      if (!flags().crateSeen) { api.setFlag('crateSeen'); api.thought('An air-dropped supply crate. Locked with a three-wheel lock: symbols on each wheel, not numbers.', 4.5); }
+      if (!flags().crateSeen) { api.setFlag('crateSeen'); api.thought(T('An air-dropped supply crate. Locked with a three-wheel lock: symbols on each wheel, not numbers.'), 4.5); }
       api.openSymbolLock({
         symbols: SYMBOLS,
         size: CRATE_CODE.length,
@@ -137,13 +138,13 @@ export function createForestInteractions(zone, api) {
             api.audio.unlock();
             zone.sync(api.state);
             api.collect('serviceCard', { silent: true });
-            api.thought('Open. Inside: the power cell, and a service card for the transmitter.', 4, 0.5);
+            api.thought(T('Open. Inside: the power cell, and a service card for the transmitter.'), 4, 0.5);
             api.persist();
             return true;
           }
           lockTries++;
           api.audio.deny();
-          if (lockTries === 3) api.thought('These are not random symbols. I saw symbols like these on the way here.', 3.5);
+          if (lockTries === 3) api.thought(T('These are not random symbols. I saw symbols like these on the way here.'), 3.5);
           return false;
         },
       });
@@ -155,15 +156,15 @@ export function createForestInteractions(zone, api) {
     add({
       id: c.id, kind: 'examine', x: c.look.x, z: c.look.z, radius: 2.0,
       available: () => true,
-      label: () => 'Examine the mark in the bark',
+      label: () => T('Examine the mark in the bark'),
       use: () => {
         api.audio.click();
-        const notch = ['', 'one notch', 'two notches', 'three notches'][c.notches];
-        api.thought(`Someone carved into the bark: a ${symbolName(c.symbol).toLowerCase()}. And under it, ${notch}.`, 4);
+        const notch = ['', T('one notch'), T('two notches'), T('three notches')][c.notches];
+        api.thought(T`Someone carved into the bark: a ${symbolName(c.symbol).toLowerCase()}. And under it, ${notch}.`, 4);
         if (!flags()[c.id]) {
           api.setFlag(c.id);
           if (!has('carvings')) api.collect('carvings', { silent: true });
-          else api.toast('Booklet updated: carved symbols', 'item', 2.5);
+          else api.toast(T('Booklet updated: carved symbols'), 'item', 2.5);
           api.persist();
         }
       },
@@ -175,54 +176,54 @@ export function createForestInteractions(zone, api) {
   add({
     id: 'tent', kind: 'examine', x: tentFront.x, z: tentFront.z, radius: 2.4,
     available: () => true,
-    label: () => 'Check the tent',
+    label: () => T('Check the tent'),
     use: () => {
       api.audio.click();
-      api.thought('The fabric is torn from the inside, not the outside. A sleeping bag, and one boot. Just one.', 4.5);
+      api.thought(T('The fabric is torn from the inside, not the outside. A sleeping bag, and one boot. Just one.'), 4.5);
       if (!flags().tentSeen) { api.setFlag('tentSeen'); api.checkQuests(); }
     },
   });
   add({
     id: 'cabinMap', kind: 'examine', x: P.cabin.spots.map.x, z: P.cabin.spots.map.z, radius: 1.5,
     available: () => true,
-    label: () => (has('campMap') ? 'Look at the map' : 'Take the map off the wall'),
+    label: () => (has('campMap') ? T('Look at the map') : T('Take the map off the wall')),
     use: () => {
       if (!has('campMap')) {
         api.collect('campMap');
-        api.thought('A map of the forest. And at the edge, a red X on the beach, exactly where the plane went down. “LZ-2”.', 5, 0.5);
-      } else api.thought('LZ-2. They marked the landing spot before it happened.', 3.5);
+        api.thought(T('A map of the forest. And at the edge, a red X on the beach, exactly where the plane went down. “LZ-2”.'), 5, 0.5);
+      } else api.thought(T('LZ-2. They marked the landing spot before it happened.'), 3.5);
       if (!flags().cabinSeen) { api.setFlag('cabinSeen'); api.checkQuests(); }
     },
   });
   add({
     id: 'calendar', kind: 'examine', x: P.cabin.spots.calendar.x, z: P.cabin.spots.calendar.z, radius: 1.3,
     available: () => true,
-    label: () => 'Examine the calendar',
+    label: () => T('Examine the calendar'),
     use: () => {
       api.audio.click();
-      api.thought('September. Two days circled in red: 14, “APPROVED”. And 23, “ARRIVAL · LZ-2”.', 4.8);
+      api.thought(T('September. Two days circled in red: 14, “APPROVED”. And 23, “ARRIVAL · LZ-2”.'), 4.8);
       if (!has('calendar')) api.collect('calendar', { silent: true });
     },
   });
-  examine('cabinDesk', P.cabin.spots.desk, 'Check the desk in the hut', 'A moldy coffee cup and pages of numbers. Whoever lived here left in a hurry: the chair is still knocked over.', 1.4);
-  examine('cabinShelf', P.cabin.spots.shelf, 'Check the shelf', 'Jars of soil and water samples, labeled with dates. The last one: September 22. The day before the flight.', 1.4);
+  examine('cabinDesk', P.cabin.spots.desk, T('Check the desk in the hut'), T('A moldy coffee cup and pages of numbers. Whoever lived here left in a hurry: the chair is still knocked over.'), 1.4);
+  examine('cabinShelf', P.cabin.spots.shelf, T('Check the shelf'), T('Jars of soil and water samples, labeled with dates. The last one: September 22. The day before the flight.'), 1.4);
   const tableFront = front(FL.table, 1.15);
   add({
     id: 'table', kind: 'examine', x: tableFront.x, z: tableFront.z, radius: 1.9,
     available: () => true,
-    label: () => (has('photo') ? 'Check the papers' : 'Check the papers and photos'),
+    label: () => (has('photo') ? T('Check the papers') : T('Check the papers and photos')),
     use: () => {
       if (!has('photo')) {
         api.collect('photo');
-        api.thought('Photos of the island, from the sea. In one of them, someone stands by the mast. On the back: “N. — first week. All according to plan.”', 5.5, 0.5);
-      } else api.thought('“Subject intake: see protocol 3.” The rest is blacked out.', 3.5);
+        api.thought(T('Photos of the island, from the sea. In one of them, someone stands by the mast. On the back: “N. — first week. All according to plan.”'), 5.5, 0.5);
+      } else api.thought(T('“Subject intake: see protocol 3.” The rest is blacked out.'), 3.5);
       if (!flags().tableSeen) { api.setFlag('tableSeen'); api.checkQuests(); }
     },
   });
-  examine('campRadio', { x: P.table.radioPos.x, z: P.table.radioPos.z }, 'Check the radio', 'A handheld radio tuned to 417.9. The battery is warm. Someone held it not long ago.', 1.2);
-  examine('crates', FL.crates, 'Check the equipment crates', 'Equipment crates with the same symbol and “NJ · FIELD 04”. Empty. Someone cleared them out before leaving.', 2.2);
-  examine('generator', FL.generator, 'Check the generator', 'A stripped generator. The parts were not broken, they were removed carefully, one by one.', 2.0);
-  examine('dish', FL.dish, 'Check the satellite dish', 'The dish points south. Not at the sky, at the sea. Toward where we came from.', 2.0);
+  examine('campRadio', { x: P.table.radioPos.x, z: P.table.radioPos.z }, T('Check the radio'), T('A handheld radio tuned to 417.9. The battery is warm. Someone held it not long ago.'), 1.2);
+  examine('crates', FL.crates, T('Check the equipment crates'), T('Equipment crates with the same symbol and “NJ · FIELD 04”. Empty. Someone cleared them out before leaving.'), 2.2);
+  examine('generator', FL.generator, T('Check the generator'), T('A stripped generator. The parts were not broken, they were removed carefully, one by one.'), 2.0);
+  examine('dish', FL.dish, T('Check the satellite dish'), T('The dish points south. Not at the sky, at the sea. Toward where we came from.'), 2.0);
 
   // ------------------------------------------------------------------ locker (code = relay frequency)
   const lockerFront = front(FL.locker, 0.95);
@@ -231,17 +232,17 @@ export function createForestInteractions(zone, api) {
   add({
     id: 'locker', kind: 'container', x: lockerFront.x, z: lockerFront.z, radius: 1.7,
     available: () => !flags().lockerOpen && !lidAnim,
-    label: () => 'Enter the locker code',
+    label: () => T('Enter the locker code'),
     use: () => {
-      if (!flags().lockerHint) { api.setFlag('lockerHint'); api.thought('Stenciled on the lid: “ACCESS: APPROVAL / ARRIVAL”.', 4.5); }
+      if (!flags().lockerHint) { api.setFlag('lockerHint'); api.thought(T('Stenciled on the lid: “ACCESS: APPROVAL / ARRIVAL”.'), 4.5); }
       api.openKeypad({
-        title: 'Locked locker · ACCESS: APPROVAL / ARRIVAL',
+        title: T('Locked locker · ACCESS: APPROVAL / ARRIVAL'),
         length: 4,
         onSubmit: (code) => {
           if (code === LOCKER_CODE) { openLocker(); return true; }
           attempts++;
           api.audio.deny();
-          if (attempts === 3) api.thought('APPROVAL, ARRIVAL. Two moments. Four digits... two numbers of two digits each?', 4.5);
+          if (attempts === 3) api.thought(T('APPROVAL, ARRIVAL. Two moments. Four digits... two numbers of two digits each?'), 4.5);
           return false;
         },
       });
@@ -254,7 +255,7 @@ export function createForestInteractions(zone, api) {
     P.locker.ledMat.emissive.setHex(0x3cff88);
     api.animate(1.1, (k) => { P.locker.lidPivot.rotation.x = -k * k * (3 - 2 * k) * 1.9; }, () => {
       lidAnim = false;
-      api.thought('Inside: a folder with the symbol, and a muddy shift sheet.', 4);
+      api.thought(T('Inside: a folder with the symbol, and a muddy shift sheet.'), 4);
       api.checkQuests();
     });
     api.checkQuests();
@@ -266,11 +267,11 @@ export function createForestInteractions(zone, api) {
       id, kind: 'pickup', obj: mesh, x: docPos.x, z: docPos.z, radius: 1.7,
       available: () => flags().lockerOpen && !lidAnim && !has(id),
       visible: () => !has(id),
-      label: () => `Pick up: ${ITEMS[id].name}`,
+      label: () => T`Pick up: ${ITEMS[id].name}`,
       use: () => {
         api.collect(id);
-        if (id === 'researchDoc') api.thought('“Subjects.” “Unplanned descent.” They call the crash an entry.', 4.5, 0.5);
-        if (id === 'schedule') api.thought('An observer on the east ridge. “23/9 · 02:41 — contact.” One minute after we crashed.', 4.5, 0.5);
+        if (id === 'researchDoc') api.thought(T('“Subjects.” “Unplanned descent.” They call the crash an entry.'), 4.5, 0.5);
+        if (id === 'schedule') api.thought(T('An observer on the east ridge. “23/9 · 02:41 — contact.” One minute after we crashed.'), 4.5, 0.5);
       },
     });
   }
@@ -283,23 +284,23 @@ export function createForestInteractions(zone, api) {
     id: 'routeChart', kind: 'pickup', obj: P.post.chart, glint: chartGlint, x: FL.routeChart.x + 0.6, z: FL.routeChart.z + 0.8, radius: 1.9,
     available: () => q() >= 13 && !has('routeChart'),
     visible: () => !has('routeChart'),
-    label: () => `Pick up: ${ITEMS.routeChart.name}`,
+    label: () => T`Pick up: ${ITEMS.routeChart.name}`,
     use: () => { api.collect('routeChart'); startEncounter(); },
   });
   add({
     id: 'postBoard', kind: 'examine', x: FL.routeChart.x + 0.6, z: FL.routeChart.z + 0.8, radius: 1.9,
     available: () => q() < 13 && !has('routeChart'),
-    label: () => 'Check the board',
-    use: () => { api.audio.click(); api.thought('A flight chart pinned to the board. First I need to understand what they did at the camp.', 3.8); },
+    label: () => T('Check the board'),
+    use: () => { api.audio.click(); api.thought(T('A flight chart pinned to the board. First I need to understand what they did at the camp.'), 3.8); },
   });
-  examine('scope', FL.scope, 'Look through the binoculars', 'The binoculars point south, at the beach. Exactly where I woke up.', 1.6);
+  examine('scope', FL.scope, T('Look through the binoculars'), T('The binoculars point south, at the beach. Exactly where I woke up.'), 1.6);
 
   // spotting scope at the camp: pan across the forest and find the lens glint on the ridge
   const SC = FL.campScope;
   add({
     id: 'campScope', kind: 'machine', x: SC.x - 1.0, z: SC.z - 0.3, radius: 1.6,
     available: () => true,
-    label: () => 'Use the binoculars',
+    label: () => T('Use the binoculars'),
     use: () => {
       const eye = new THREE.Vector3(SC.x, terrainHeight(SC.x, SC.z) + 1.45, SC.z);
       api.openScope({
@@ -312,7 +313,7 @@ export function createForestInteractions(zone, api) {
           if (flags().postSpotted) return;
           api.setFlag('postSpotted');
           api.audio.sting();
-          api.thought('A glint. On the east ridge, above the cliff: a lens. Someone set something up there.', 4.5);
+          api.thought(T('A glint. On the east ridge, above the cliff: a lens. Someone set something up there.'), 4.5);
           api.persist();
         },
       });
@@ -329,7 +330,7 @@ export function createForestInteractions(zone, api) {
   function startEncounter() {
     if (encounter) return;
     encounter = api.seq.run([
-      [0.6, () => api.thought('Someone sat here and watched the crash. From here.', 3.2)],
+      [0.6, () => api.thought(T('Someone sat here and watched the crash. From here.'), 3.2)],
       [3.4, () => api.audio.branchSnap(figStart)],
       [3.7, () => api.flickerFlashlight(1.6)],
       [3.9, () => {
@@ -341,11 +342,11 @@ export function createForestInteractions(zone, api) {
         api.audio.sting();
       }],
       [5.5, () => { figMove = { t: 0, dur: 1.3 }; api.audio.footstepsRun(figStart, figEnd, 1.3); }],
-      [6.9, () => { fig.visible = false; figMove = null; api.thought('Who\'s there?!', 2.4); }],
+      [6.9, () => { fig.visible = false; figMove = null; api.thought(T('Who\'s there?!'), 2.4); }],
       [10.2, () => {
         api.audio.radio(2.5);
         api.audio.signalBeeps();
-        api.toast('The radio in the transmitter woke up. Someone is calling it.', 'warn', 4.5);
+        api.toast(T('The radio in the transmitter woke up. Someone is calling it.'), 'warn', 4.5);
         api.setFlag('encounterDone');
         encounter = null;
         api.checkQuests();
@@ -427,7 +428,7 @@ export function createForestInteractions(zone, api) {
     const dT = Math.hypot(px - T.x, pz - T.z);
     if (!f.reachedTransmitter && dT < 13) {
       api.setFlag('reachedTransmitter');
-      api.thought('The transmitter. Someone built it here, in the middle of the forest, and it is dead.', 4);
+      api.thought(T('The transmitter. Someone built it here, in the middle of the forest, and it is dead.'), 4);
       api.checkQuests();
     }
     // brief movement between the trees on the way to the signal
@@ -442,7 +443,7 @@ export function createForestInteractions(zone, api) {
       fig.visible = true;
       figMove = { t: 0, dur: 1.1, from: a, to: b };
       api.audio.branchSnap(a);
-      api.seq.after(1.15, () => { fig.visible = false; figMove = null; api.thought('...was someone there? Between the trees.', 3); });
+      api.seq.after(1.15, () => { fig.visible = false; figMove = null; api.thought(T('...was someone there? Between the trees.'), 3); });
     }
     // the camp radio wakes up on its own
     if (!f.campRadio && !campRadioRun && Math.hypot(px - FL.camp.x, pz - FL.camp.z) < 16) {
@@ -450,23 +451,23 @@ export function createForestInteractions(zone, api) {
       P.table.radioLedMat.emissiveIntensity = 3;
       api.audio.radioAt(P.table.radioPos, 5);
       api.subtitle('“...camp, this is ridge... movement at L-Z two... say again...”', 'pa', '', 4.8);
-      api.seq.after(5, () => { P.table.radioLedMat.emissiveIntensity = 0; api.setFlag('campRadio'); campRadioRun = false; api.thought('The radio on the table. It turned on by itself.', 3); });
+      api.seq.after(5, () => { P.table.radioLedMat.emissiveIntensity = 0; api.setFlag('campRadio'); campRadioRun = false; api.thought(T('The radio on the table. It turned on by itself.'), 3); });
     }
     // footprint hints
     const [sx, sz] = PRINTS.toPower[0];
     if (!f.printsPower && s.questIndex === 8 && Math.hypot(px - sx, pz - sz) < 7) {
       api.setFlag('printsPower');
-      api.thought('Boot prints in the mud. They lead west from the transmitter.', 3.5);
+      api.thought(T('Boot prints in the mud. They lead west from the transmitter.'), 3.5);
     }
     const [rx, rz] = PRINTS.toRidge[0];
     if (!f.printsRidge && s.questIndex >= 12 && Math.hypot(px - rx, pz - rz) < 6) {
       api.setFlag('printsRidge');
-      api.thought('Fresh tracks. Someone walked east from the camp toward the ridge, tonight.', 3.8);
+      api.thought(T('Fresh tracks. Someone walked east from the camp toward the ridge, tonight.'), 3.8);
     }
     const [ux, uz] = PRINTS.stray[0];
     if (!f.printsStray && Math.hypot(px - ux, pz - uz) < 5) {
       api.setFlag('printsStray');
-      api.thought('These tracks go straight to the edge of the cliff... and vanish.', 3.8);
+      api.thought(T('These tracks go straight to the edge of the cliff... and vanish.'), 3.8);
     }
     // a scripted encounter interrupted by a reload restarts
     if (has('routeChart') && !f.encounterDone && !encounter) startEncounter();
