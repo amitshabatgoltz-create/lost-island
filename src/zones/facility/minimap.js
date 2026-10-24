@@ -5,6 +5,7 @@ const inRoom = (x, z) => Object.values(ROOMS).some(({ r }) => x >= r[0] && x <= 
 const center = (id) => ({ x: (ROOMS[id].r[0] + ROOMS[id].r[1]) / 2, z: (ROOMS[id].r[2] + ROOMS[id].r[3]) / 2 });
 
 export const MINIMAP = {
+  title: 'FACILITY N-1',
   margin: 4,
   view: 16, // small indoor plan: zoom in
   ground: (x, z) => (inRoom(x, z) ? [112, 120, 122] : [30, 32, 34]),
