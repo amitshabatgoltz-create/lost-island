@@ -1,5 +1,5 @@
 // Converts a Mixamo animation FBX into an animation-only clip file (public/models/anims/<name>.glb).
-// Usage (from the repo root): node tools/anims/convert.mjs <file.fbx> <Clip_Name>
+// Usage (from the repo root): node tools/anims/convert.mjs <file.fbx> <Clip_Name> [end seconds]
 // The clip is retargeted to survivor.glb's skeleton: bones renamed to `mixamorig10…`, only the bones the
 // game's clips animate, hips travel scaled to survivor's leg length. Root motion is kept (the game reads it).
 // Needs @gltf-transform/cli (npx downloads it) for resampling and meshopt compression.
@@ -13,8 +13,9 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const OUT = path.join(ROOT, 'public/models/anims');
 const TMP = path.join(ROOT, 'tools/anims/tmp');
 const SURVIVOR_HIPS_Y = 96.055; // survivor.glb's hips height in its bind pose (cm)
-const [src, name] = process.argv.slice(2);
-if (!src || !name) { console.error('usage: node tools/anims/convert.mjs <file.fbx> <Clip_Name>'); process.exit(1); }
+const [src, name, endArg] = process.argv.slice(2);
+if (!src || !name) { console.error('usage: node tools/anims/convert.mjs <file.fbx> <Clip_Name> [end seconds]'); process.exit(1); }
+const end = endArg ? Number(endArg) : Infinity; // keep only the start of a long clip
 
 // the bones survivor.glb's clips animate
 const glb = fs.readFileSync(path.join(ROOT, 'public/models/survivor.glb'));
@@ -24,6 +25,7 @@ const animated = new Set(sj.animations[0].channels.map((c) => sj.nodes[c.target.
 const buf = fs.readFileSync(src);
 const fbx = new FBXLoader().parse(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength), '');
 const clip = fbx.animations[0];
+if (end < clip.duration) { clip.tracks = clip.tracks.map((t) => t.trim(0, end)); clip.duration = end; }
 const k = SURVIVOR_HIPS_Y / fbx.getObjectByName('mixamorigHips').position.y;
 
 const tracks = [];

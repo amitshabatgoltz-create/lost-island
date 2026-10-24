@@ -21,3 +21,9 @@ in both hands. They were converted from the FBX files with the same converter
 under their own names). `src/player.js` mirrors `Turn_Right_90` into `Turn_Left_90` at load, and samples
 `Stop_Walking` / `Idle_To_Running` for the hold pose that the upper body takes over the plain idle, walk and
 run clips whenever the survivor has the flashlight.
+
+## Falling
+
+`falling` (the first 3.3 s of Mixamo's Falling, the airborne loop: `convert.mjs Falling.fbx Falling 3.3`)
+plays while the survivor drops more than 1 m off a cliff; `fall_land` (Fall A Land To Standing Idle 02)
+plays on landing after a fall of more than 2 m.
