@@ -3,5 +3,7 @@ dist
 tools/skins/fbx/
 tools/skins/tmp/
 _preview/
+dist-poki
+dist-crazygames
 tools/anims/fbx/
 tools/anims/tmp/

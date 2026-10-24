@@ -26,30 +26,30 @@ export async function build(env, api, onProgress = () => {}) {
   const updaters = [];
   const rnd = mulberry32(1337);
 
-  onProgress(0.15, 'פני השטח של האי');
+  onProgress(0.15, 'Island terrain');
   const terrain = buildTerrain();
   group.add(terrain);
   await yieldFrame();
 
-  onProgress(0.3, 'הים');
+  onProgress(0.3, 'The sea');
   group.add(buildSea(shared));
   await yieldFrame();
 
-  onProgress(0.42, 'שברי המטוס');
+  onProgress(0.42, 'Plane wreckage');
   const wreck = buildWreck(group, colliders, occluders, updaters, rnd);
   await yieldFrame();
 
-  onProgress(0.55, 'סלעים');
+  onProgress(0.55, 'Rocks');
   buildRocks(group, colliders, occluders, rnd);
   await yieldFrame();
 
-  onProgress(0.68, 'ג׳ונגל וצמחייה');
+  onProgress(0.68, 'Jungle and plants');
   buildVegetation(group, colliders, shared, rnd);
   await yieldFrame();
 
   bakeContactShade(terrain, shadeSpotsFromColliders(colliders));
 
-  onProgress(0.82, 'האות');
+  onProgress(0.82, 'The signal');
   const signal = buildSignalMast(group);
   const peak = new THREE.Mesh(
     new THREE.ConeGeometry(90, 95, 9, 3),
@@ -72,10 +72,10 @@ export async function build(env, api, onProgress = () => {}) {
     floaters.push(m);
   });
 
-  onProgress(0.86, 'המחנה');
+  onProgress(0.86, 'The camp');
   const base = buildBaseCamp(group, colliders, occluders, heightAt, LAYOUT.base);
 
-  onProgress(0.9, 'מניח חפצים');
+  onProgress(0.9, 'Placing items');
   await yieldFrame();
 
   function waveHeight(x, z, t) {

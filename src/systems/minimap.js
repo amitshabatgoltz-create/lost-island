@@ -5,6 +5,7 @@
 // A zone can add an optional `minimap` description for nicer colours and labelled places:
 //   minimap: {
 //     margin: 30,                                    // metres of scenery shown around the play bounds
+//     view: 42,                                      // metres from the centre to the rim (zoom)
 //     ground(x, z, h, slope) => [r, g, b] (0..255)   // ground colour (sand, grass, water...)
 //     paths: [[[x, z], ...], ...],                   // trails drawn on top
 //     landmarks: [{ x, z, label, kind, far, found(state) }], // shown once found(state) is true
@@ -12,7 +13,7 @@
 // The baked picture is cached per zone id, so walking back and forth between zones costs nothing.
 
 const PX = 3; // baked picture: pixels per metre
-const VIEW = 42; // metres from the centre of the minimap to its rim
+const VIEW = 42; // metres from the centre of the minimap to its rim (a zone can set its own `view`)
 
 const KIND_COLOR = { place: '#f2d49b', camp: '#9fe0a8', danger: '#ff6b5a', far: '#d7e2ec' };
 
@@ -47,7 +48,7 @@ export class Minimap {
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     const size = Math.round(css * dpr);
     if (size !== this.size) { this.canvas.width = this.canvas.height = size; this.size = size; }
-    const c = this.ctx, R = size / 2, k = (R - 3 * dpr) / VIEW; // pixels per metre on screen
+    const c = this.ctx, R = size / 2, k = (R - 3 * dpr) / this.base.view; // pixels per metre on screen
     const b = this.base;
     const cs = Math.cos(camYaw), sn = Math.sin(camYaw);
     // world offset (metres from the player) -> minimap pixel
@@ -218,7 +219,7 @@ function bake(zone) {
   c.setLineDash([2, 2]);
   c.strokeRect(B.minX, B.minZ, B.maxX - B.minX, B.maxZ - B.minZ);
 
-  return { canvas, minX, minZ, w: W, h: H, landmarks: d.landmarks || [] };
+  return { canvas, minX, minZ, w: W, h: H, view: d.view || VIEW, landmarks: d.landmarks || [] };
 }
 
 // zones without their own colours: water below the sea level (if the zone has a sea), green by height

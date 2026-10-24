@@ -51,7 +51,7 @@ function legPhase(a, ta, b) {
 }
 const MODEL_URL = './models/survivor.glb';
 // extra clips (tools/anims/README.md); a clip here replaces survivor.glb's clip of the same name
-const ANIM_URLS = ['start_walking', 'torch_start_walking', 'stop_walking', 'idle_to_running', 'turn_right_90', 'jump', 'falling', 'fall_land'].map((n) => `./models/anims/${n}.glb`);
+const ANIM_URLS = ['start_walking', 'torch_start_walking', 'stop_walking', 'idle_to_running', 'turn_right_90', 'jump', 'running_jump', 'forward_jump', 'falling', 'fall_land'].map((n) => `./models/anims/${n}.glb`);
 const SCALE = 0.0104; // the model is authored in centimetres, 176 cm tall
 const WALK = 2.8, RUN = 5.8; // m/s
 // first steps from standing: Start_Walking (and its flashlight version) is a slower stroll than Walking, so it is sped
@@ -61,7 +61,15 @@ const START = {
   Torch_Start_Walking: { rate: 2.1, from: 0.3, to: 1.4 },
 };
 // clips whose forward travel moves the player (the hips travel is taken back out), by how they end
-const DRIVE = { Start_Walking: 'start', Torch_Start_Walking: 'start', Idle_To_Running: 'run', Stop_Walking: 'stop', Jump: 'jump', Fall_Land: 'land' };
+const DRIVE = { Start_Walking: 'start', Torch_Start_Walking: 'start', Idle_To_Running: 'run', Stop_Walking: 'stop', Jump: 'jump', Running_Jump: 'jump', Forward_Jump: 'jump', Fall_Land: 'land' };
+// Space: [clip, options] — with the flashlight out its two-handed Jump, otherwise a running leap on the move
+// (Jump 1) or a standing jump forward (Forward Jump). `free` is the clip time where the feet are back on the
+// ground: from there the player can move again, and moving blends straight out of the rest of the clip
+const JUMPS = {
+  torch: ['Jump', { timeScale: 1.2, from: 1.05, to: 2.45, free: 2.0 }],
+  moving: ['Running_Jump', { timeScale: 1.25, from: 0.05, free: 0.6 }],
+  standing: ['Forward_Jump', { timeScale: 1.3, from: 0.3, free: 1.25 }],
+};
 // falling off a drop: the ground falling away faster than this (m per m of travel, and m per frame) starts a fall
 const FALL_SLOPE = 2, FALL_STEP = 0.2;
 const GRAVITY = 22; // m/s², a little above real for a snappier fall
@@ -306,6 +314,7 @@ export class Player {
     this.zone = zone;
     this.colliders = zone.colliders;
     this.occluders = zone.occluders;
+    this.ceiling = zone.ceiling || 0; // indoor zones: the camera stays under the ceiling
   }
 
   heightAt(x, z) { return this.zone ? this.zone.heightAt(x, z) : 0; }
@@ -416,6 +425,7 @@ export class Player {
       name, action: a, from, to, reverse: !!opts.reverse, loop: !!opts.loop, lock: !!opts.lock,
       w: opts.fadeIn === 0 ? 1 : 0, fadeIn: opts.fadeIn ?? 0.2, fadeOut: opts.fadeOut ?? 0.25,
       root: opts.root || null, turn: opts.turn || 0, holdFacing: !!opts.holdFacing, onDone: opts.onDone, ending: false, p: 0,
+      free: opts.free ?? null,
     };
   }
 
@@ -485,16 +495,18 @@ export class Player {
     this.pos.y = gh;
     this.air = null;
     if (a.y0 - gh > FALL_LAND && this.drives.Fall_Land) {
-      this.play('Fall_Land', { from: 0.25, lock: true, fadeIn: 0.08, fadeOut: 0.3 });
+      this.play('Fall_Land', { from: 0.25, free: 0.85, lock: true, fadeIn: 0.08, fadeOut: 0.3 });
     } else if (this.act && this.act.name === 'Falling') this.act.ending = true;
     this.still = this.speed < 0.2;
   }
 
-  // Space: a leap forward (the Jump clip's run-up is skipped)
+  // Space: a leap forward
   jump() {
-    if (!this.mixer || !this.drives.Jump || this.busy || this.air || (this.act && this.act.name === 'Jump')) return;
+    if (!this.mixer || this.busy || this.air || (this.act && this.drives[this.act.name]?.kind === 'jump')) return;
+    const [name, opts] = JUMPS[this.holdTorch ? 'torch' : this.speed > 1 ? 'moving' : 'standing'];
+    if (!this.drives[name]) return;
     this.cancelAction();
-    this.play('Jump', { timeScale: 1.2, from: 1.05, to: 2.45, lock: true, fadeIn: 0.15, fadeOut: 0.3 });
+    this.play(name, { ...opts, lock: true, fadeIn: 0.12, fadeOut: 0.3 });
   }
 
   // rotate camera from mouse deltas
@@ -566,6 +578,11 @@ export class Player {
       if (drive.kind === 'start' && (!moving || running || this.busy)) dr.ending = true;
       else if (drive.kind === 'run' && (!moving || !running || this.busy)) dr.ending = true;
       else if (drive.kind === 'stop' && (moving || this.busy)) dr.ending = true;
+      // landed from a jump (or a fall): the controls are back, and walking off cuts the recovery short
+      else if (dr.free !== null && dr.action.time >= dr.free && (dr.lock || moving)) {
+        dr.lock = false;
+        if (moving) { dr.ending = true; dr.fadeOut = 0.15; }
+      }
       else if ((drive.kind === 'start' || drive.kind === 'run') && dr.action.time >= dr.to - 0.02) {
         dr.ending = true;
         this.actions[drive.kind === 'start' ? 'Walking' : 'Running'].time = drive.phase;
@@ -799,6 +816,7 @@ export class Player {
     this.ray.far = want;
     const hits = this.ray.intersectObjects(this.occluders, false);
     if (hits.length) want = Math.max(0.8, hits[0].distance - 0.3);
+    if (this.ceiling && dir.y > 0.01) want = Math.max(0.8, Math.min(want, (this.ceiling - 0.6 - origin.y) / dir.y));
     // terrain
     for (let i = 1; i <= 10; i++) {
       const d = (want * i) / 10;
@@ -810,6 +828,7 @@ export class Player {
     const camPos = origin.clone().addScaledVector(dir, this.curDist);
     const gh = this.heightAt(camPos.x, camPos.z) + 0.3;
     if (camPos.y < gh) camPos.y = gh;
+    if (this.ceiling && camPos.y > this.ceiling - 0.5) camPos.y = this.ceiling - 0.5;
     this.camera.position.copy(camPos);
     this.camera.lookAt(origin.x, origin.y - 0.1, origin.z);
     this.followCam = true;

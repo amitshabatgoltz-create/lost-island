@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { fbm, mulberry32, smoothstep } from '../../noise.js';
 import { heightAt as terrainHeight, streamZ, streamLevel, distToPaths } from './terrain.js';
-import { FL, FLOGS, PRINTS, CLEARINGS, BOUNDS } from './layout.js';
+import { FL, FLOGS, PRINTS, CLEARINGS, BOUNDS, NORTH_EXIT } from './layout.js';
 import { buildClimbs } from './climbs.js';
 import {
   palmGeometries, jungleTreeGeometries, bushGeometry, fernGeometry, grassGeometry, softSprite,
@@ -43,20 +43,20 @@ export async function build(env, api, onProgress = () => {}) {
   };
   const ctx = { group, colliders, occluders, heightAt: terrainHeight };
 
-  onProgress(0.1, 'פני השטח של היער');
+  onProgress(0.1, 'Forest terrain');
   const terrain = buildTerrainMesh();
   group.add(terrain);
   buildStream(ctx, streamZ, streamLevel, shared);
   bridgeHeight = buildBridge(ctx, FL.bridge, terrainHeight);
   await yieldFrame();
 
-  onProgress(0.3, 'המשדר');
+  onProgress(0.3, 'The transmitter');
   const transmitter = buildTransmitter(ctx, FL.transmitter, FL.mast);
   const supply = buildSupplyDrop(ctx, FL.powerSite);
   for (const c of CARVINGS) buildCarvedTree(ctx, c, SYMBOLS.find((s) => s.id === c.symbol).path);
   await yieldFrame();
 
-  onProgress(0.45, 'המחנה');
+  onProgress(0.45, 'The camp');
   const mapTex = canvasTex(330, 240, (c, w, h) => {
     c.fillStyle = '#ddd0ae'; c.fillRect(0, 0, w, h);
     c.strokeStyle = '#4d6f86'; c.lineWidth = 4; c.beginPath(); c.moveTo(10, 140); c.bezierCurveTo(100, 120, 200, 160, 320, 130); c.stroke();
@@ -79,7 +79,7 @@ export async function build(env, api, onProgress = () => {}) {
   group.add(campLight);
   await yieldFrame();
 
-  onProgress(0.55, 'הרכס');
+  onProgress(0.55, 'The ridge');
   const post = buildPost(ctx, FL.post, FL.scope, FL.routeChart);
   buildCampScope(ctx, FL.campScope);
   // a lens glint at the observation post, only shown when looking through the camp scope
@@ -95,19 +95,19 @@ export async function build(env, api, onProgress = () => {}) {
   const figure = buildFigure(ctx);
   await yieldFrame();
 
-  onProgress(0.65, 'עצים, שורשים וסלעים');
+  onProgress(0.65, 'Trees, roots and rocks');
   const { trunkMat, palmTrunkMat, canopyMat, smallMat, palmLeafMat } = vegetationMaterials(shared);
   buildGiantTrees(ctx, [[-14, 60, 1.9], [12, 18, 2.1], [-28, -2, 1.8], [-6, -46, 2.0], [40, -40, 1.9], [-60, 20, 2.2], [30, 70, 1.9], [-80, -70, 2.0]], canopyMat, trunkMat, jungleTreeGeometries);
   buildLogs(ctx, FLOGS);
   climbs = buildClimbs(ctx, FL.lookout, FLOGS);
   buildRocks(ctx, rnd);
   await yieldFrame();
-  onProgress(0.75, 'צמחייה');
+  onProgress(0.75, 'Plants');
   const smallChunks = buildVegetation(ctx, rnd, { trunkMat, palmTrunkMat, canopyMat, smallMat, palmLeafMat }, cabin);
   bakeContactShade(terrain, shadeSpotsFromColliders(colliders));
   await yieldFrame();
 
-  onProgress(0.88, 'אורות רחוקים');
+  onProgress(0.88, 'Distant lights');
   // lights deep in the forest (switched on by the Part 2 ending) and the relocated signal
   const farMat = [];
   const farLights = FL.farLights.map(([x, z], i) => {
@@ -144,11 +144,17 @@ export async function build(env, api, onProgress = () => {}) {
     fogDensity: () => 0.022,
     spawns: {
       fromBeach: { x: FL.entry.x, z: FL.entry.z, yaw: Math.PI },
+      fromRidge: { x: NORTH_EXIT.x, z: NORTH_EXIT.z + 4, yaw: 0 },
     },
     exits: [{
       to: 'beach', spawn: 'fromForest',
       when: () => true,
       test: (x, z) => z > 101.5 && Math.abs(x) < 9,
+    }, {
+      // Part 3: the trail north-east of the camp leaves the forest once the signal has moved
+      to: 'ridge', spawn: 'fromForest',
+      when: (s) => !!s.flags.endingSeen,
+      test: (x, z) => z < NORTH_EXIT.z && Math.abs(x - NORTH_EXIT.x) < NORTH_EXIT.hw,
     }],
     trailhead: { x: 0, z: 101 },
     ambience(p) {

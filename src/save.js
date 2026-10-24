@@ -55,7 +55,9 @@ export function loadState() {
     const base = freshState();
     // Part 1 saves have no zone or Part 2 flags: missing fields fall back to defaults, nothing is reset
     const merged = { ...base, ...s, flags: { ...base.flags, ...(s.flags || {}) } };
-    if (!['beach', 'forest'].includes(merged.zone)) merged.zone = 'beach';
+    if (!['beach', 'forest', 'ridge', 'facility'].includes(merged.zone)) merged.zone = 'beach';
+    // Part 3 zones only exist after the Part 2 ending; anything else is a broken save, so go back to the forest
+    if (['ridge', 'facility'].includes(merged.zone) && !merged.flags.endingSeen) merged.zone = 'forest';
     merged.collected = [...new Set(merged.collected)];
     merged.clues = [...new Set(merged.clues)];
     if (!s.inv) delete merged.inv; // an old save: rebuild the bag from what was picked up

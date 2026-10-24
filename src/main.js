@@ -1,4 +1,4 @@
-// LOST: The Missing Island — Parts 1 & 2. Bootstrap, game modes, zone loading, quest chain and saves.
+// LOST: The Missing Island — Parts 1–3. Bootstrap, game modes, zone loading, quest chain and saves.
 // Zone content and zone-specific interactions live in src/zones/*, story data in src/data/*.
 import * as THREE from 'three';
 import { createEnvironment } from './env.js';
@@ -9,7 +9,7 @@ import { UI } from './ui.js';
 import { Sequencer } from './core/sequencer.js';
 import { disposeTree } from './core/dispose.js';
 import { ITEMS } from './data/items.js';
-import { QUESTS, questById } from './data/quests.js';
+import { QUESTS, questById, PART_START } from './data/quests.js';
 import { FINAL_ENTRY, CLUES } from './data/clues.js';
 import { QUEST_INFO, mainGoal, CLUE_LEARNED } from './data/story.js';
 import { freshState, loadState, saveState, clearState, loadSettings, saveSettings, storageAvailable } from './save.js';
@@ -22,12 +22,26 @@ import { setAnisotropy } from './gfx/textures.js';
 import { Lobby } from './lobby.js';
 import { DEFAULT_SKIN } from './data/skins.js';
 import { Minimap } from './systems/minimap.js';
+import { portal } from './portal.js';
+// fonts are bundled with the game (no outside requests, works on game portals)
+import '@fontsource/heebo/300.css';
+import '@fontsource/heebo/400.css';
+import '@fontsource/heebo/500.css';
+import '@fontsource/heebo/700.css';
+import '@fontsource/heebo/800.css';
+import '@fontsource/amatic-sc/400.css';
+import '@fontsource/amatic-sc/700.css';
+import '@fontsource/caveat/500.css';
+import '@fontsource/caveat/700.css';
 
 // zones are separate chunks, loaded on demand and disposed when left
 const ZONES = {
   beach: () => import('./zones/beach/index.js'),
   forest: () => import('./zones/forest/index.js'),
+  ridge: () => import('./zones/ridge/index.js'),
+  facility: () => import('./zones/facility/index.js'),
 };
+const LOADING_TEXT = { beach: 'Back to the beach…', forest: 'Entering the forest…', ridge: 'Climbing north…', facility: 'Into the mountain…' };
 
 const params = new URLSearchParams(location.search);
 const DEBUG = params.has('debug');
@@ -88,15 +102,15 @@ const has = (id) => game.state.collected.includes(id);
 
 // first-time guidance for a mechanic; remembered across sessions so it never repeats
 const TIPS = {
-  move: 'WASD — תנועה · לחץ על המסך והזז את העכבר כדי להסתכל · Shift — ריצה.',
-  interact: 'כשמופיעה הנחיה בתחתית המסך, לחץ E כדי לבדוק חפץ או לאסוף אותו.',
-  flashlight: 'F מדליק ומכבה את הפנס.',
-  journal: 'J פותח את החוברת: מה אני יודע, הרמזים שמצאתי והמפה.',
-  clue: 'כל רמז נרשם בחוברת (J ← רמזים). המשימה מתעדכנת לפי מה שגילית.',
-  locked: 'זה נעול בצירוף. חפש בסביבה פרטים שמסבירים אותו — כל מה שמצאת שמור בחוברת (J).',
-  hint: 'תקוע? H נותן רמז. כל לחיצה ברורה יותר — והאחרונה מסבירה את הפתרון.',
-  forest: 'ביער אין חץ. נווט לפי האור האדום, השבילים וציוני הדרך — ולפי מפת היער בחוברת (J ← מפה).',
-  storage: 'בתיבה: לחיצה מעבירה ערימה שלמה, Shift+לחיצה מעבירה פריט אחד.',
+  move: 'WASD to move · click the screen and move the mouse to look · Shift to run.',
+  interact: 'When a prompt shows at the bottom of the screen, press E to check or pick up an object.',
+  flashlight: 'F turns the flashlight on and off.',
+  journal: 'J opens the booklet: what I know, the clues I found and the map.',
+  clue: 'Every clue goes into the booklet (J → Clues). Your mission updates as you discover more.',
+  locked: 'This has a combination lock. Look around for details that explain it. Everything you found is in the booklet (J).',
+  hint: 'Stuck? H gives a hint. Each press is clearer, and the last one explains the answer.',
+  forest: 'There is no arrow in the forest. Find your way by the red light, the trails and landmarks, and the forest map in the booklet (J → Map).',
+  storage: 'In the chest: click moves a whole stack, Shift+click moves one item.',
 };
 function tip(id) {
   settings.tutorials = settings.tutorials || {};
@@ -105,13 +119,19 @@ function tip(id) {
   saveSettings(settings);
   ui.tip(TIPS[id]);
 }
-function setMode(m) { game.mode = m; game.modeTime = 0; }
+// modes where the player is not playing: portals may only show ads then
+const IDLE_MODES = ['loading', 'title', 'paused', 'end'];
+function setMode(m) {
+  game.mode = m;
+  game.modeTime = 0;
+  portal.gameplay(!IDLE_MODES.includes(m));
+}
 
 // ------------------------------------------------------------------ API handed to zones
 const api = {
   get state() { return game.state; },
   get player() { return player; },
-  audio, ui, seq,
+  audio, ui, seq, renderer,
   has,
   collect,
   setFlag(k, v = true) { game.state.flags[k] = v; },
@@ -128,11 +148,19 @@ const api = {
   openWiring: (opts) => openPuzzle('openWiring', opts),
   openTuning: (opts) => openPuzzle('openTuning', { ...opts, tuner: audio.startTuning() }),
   openScope,
+  // a document or a screen fills the panel; the game waits behind it
+  readDocument(id, opts = {}) {
+    const c = CLUES.find((x) => x.id === id);
+    if (!c) return;
+    audio.page();
+    openPuzzle('openDocument', { title: c.title, html: typeof c.desc === 'function' ? c.desc(game.state) : c.desc, ...opts });
+  },
+  openTerminal: (opts) => openPuzzle('openTerminal', opts),
   openBoard() {
     audio.page();
     ui.journalTab = 'clues';
     openJournal();
-    ui.thought('הלוח שלי. כל מה שמצאתי, מחובר בחוט אדום.', 3);
+    ui.thought('My board. Everything I found, connected with red string.', 3);
   },
   checkQuests: () => checkQuests(),
   setFlashlight: (on) => setFlashlight(on),
@@ -175,12 +203,13 @@ const api = {
 
 // ------------------------------------------------------------------ boot
 async function boot() {
+  await portal.init();
   try {
     env = createEnvironment(renderer);
     player = new Player(env.scene, camera);
     player.onBoundary = onBoundary;
-    ui.setLoading(0.02, 'הדמות');
-    const onSkin = (p) => ui.setLoading(0.02 + p * 0.08, 'הדמות');
+    ui.setLoading(0.02, 'Character');
+    const onSkin = (p) => ui.setLoading(0.02 + p * 0.08, 'Character');
     try {
       await player.load(onSkin, settings.skin || DEFAULT_SKIN);
     } catch (err) {
@@ -195,13 +224,14 @@ async function boot() {
     await loadZone('beach', (p, t) => ui.setLoading(0.1 + p * 0.82, t), loadState());
   } catch (err) {
     console.error(err);
-    ui.setLoading(1, 'שגיאה בטעינת העולם. נסה לרענן את הדף.');
+    ui.setLoading(1, 'Error loading the world. Try refreshing the page.');
     return;
   }
-  ui.setLoading(0.96, 'מכין שיידרים');
+  ui.setLoading(0.96, 'Preparing shaders');
   await new Promise((r) => setTimeout(r, 0));
   intro.compile(renderer);
-  ui.setLoading(1, 'מוכן');
+  ui.setLoading(1, 'Ready');
+  portal.loadingFinished();
   setTimeout(() => { ui.show('loading', false); showTitle(); }, 250);
   requestAnimationFrame(loop);
 }
@@ -210,6 +240,7 @@ async function boot() {
 async function loadZone(id, onProgress = () => {}, stateForEnv = null) {
   if (game.zone && game.zone.id === id) return game.zone;
   if (game.zone) {
+    if (game.zone.dispose) game.zone.dispose();
     game.lastDispose = disposeTree(game.zone.group);
     game.zone = null;
   }
@@ -250,9 +281,10 @@ async function enterZone(to, spawnName) {
   await new Promise((r) => setTimeout(r, 650));
   const firstForest = to === 'forest' && !game.state.flags.nightfall;
   if (to === 'forest') game.state.flags.nightfall = true;
+  const from = game.zone.id;
   game.state.zone = to;
   ui.show('loading', true);
-  ui.setLoading(0, to === 'forest' ? 'נכנס ליער…' : 'חוזר אל החוף…');
+  ui.setLoading(0, to === 'forest' && from !== 'beach' ? 'Back to the forest…' : LOADING_TEXT[to]);
   await loadZone(to, (p, t) => ui.setLoading(p, t));
   ui.show('loading', false);
   const sp = game.zone.spawns[spawnName];
@@ -268,16 +300,17 @@ async function enterZone(to, spawnName) {
   audio.resumeAmbience();
   ui.fade(0, 1.4);
   if (to === 'forest') setTimeout(() => tip('forest'), 3000);
+  if (game.zone.onEnter) game.zone.onEnter(from);
   if (firstForest) {
-    ui.titleCard('כמה שעות אחר כך', 'היער · לילה');
-    api.thought('החושך ירד מהר. הפנס הוא כל מה שיש לי — ואור אדום אחד, מעל הצמרות.', 5, 2.5);
+    ui.titleCard('A few hours later', 'The forest · night');
+    api.thought('Darkness fell fast. The flashlight is all I have, and one red light above the treetops.', 5, 2.5);
   }
 }
 
 // ------------------------------------------------------------------ items & quests
 function bagFull(need) {
   audio.deny();
-  ui.toast(need ? `התיק מלא — אין מקום ל־${need}. אפשר לפנות מקום בתיבה שבמחנה על החוף.` : 'התיק מלא', 'warn', 4);
+  ui.toast(need ? `My bag is full, no room for ${need}. I can make room in the chest at the beach camp.` : 'My bag is full', 'warn', 4);
 }
 
 // returns true if the item was taken
@@ -318,7 +351,7 @@ function collectResource(nodeId, itemId, qty) {
   s.collected.push(nodeId);
   audio.pickup();
   player.playPickup();
-  ui.toast(`נאסף: ${ITEMS[itemId].name} ×${qty}`, 'item', 3);
+  ui.toast(`Picked up: ${ITEMS[itemId].name} ×${qty}`, 'item', 3);
   refreshHUD(itemId);
   persist();
   return true;
@@ -335,7 +368,7 @@ function openStorage(containerId, onClosed) {
     title: CONTAINERS[containerId].name,
     bag: s.inv,
     chest,
-    keyItems: ['flashlight', 'booklet', 'powerCell'].filter((id) => has(id) && !(id === 'powerCell' && s.flags.powerInstalled)),
+    keyItems: ['flashlight', 'booklet', 'powerCell', 'badge', 'fuse'].filter((id) => has(id) && !(id === 'powerCell' && s.flags.powerInstalled) && !(id === 'fuse' && s.flags.fuseInstalled)),
     move(direction, id, qty) {
       const [from, to] = direction === 'toChest' ? [s.inv, chest] : [chest, s.inv];
       const r = transfer(from, to, id, qty);
@@ -358,7 +391,7 @@ function openPuzzle(method, opts) {
   setMode('puzzle');
   releasePointer();
   ui.setPrompt(null);
-  ui[method]({
+  return ui[method]({
     ...opts,
     onClose() {
       if (game.mode === 'puzzle') setMode('play');
@@ -416,13 +449,13 @@ function updateScope(dt) {
 function showHint() {
   const s = game.state;
   const q = QUESTS[Math.min(s.questIndex, QUESTS.length - 1)];
-  if (!q.hints || !q.hints.length) { ui.toast('אין רמז כרגע.', '', 2); return; }
+  if (!q.hints || !q.hints.length) { ui.toast('No hint right now.', '', 2); return; }
   s.hints = s.hints || {};
   const prev = s.hints[q.id] || 0;
   const lvl = Math.min(prev + 1, q.hints.length);
   if (lvl > prev) { s.hints[q.id] = lvl; s.hintsUsed = (s.hintsUsed || 0) + 1; }
   audio.page();
-  ui.toast(`רמז ${lvl} / ${q.hints.length}`, '', 2.2);
+  ui.toast(`Hint ${lvl} / ${q.hints.length}`, '', 2.2);
   ui.thought(q.hints[lvl - 1], 7);
   persist();
 }
@@ -459,7 +492,7 @@ function onQuestStart(i) {
   game.questTime = 0;
   audio.quest();
   ui.flashQuest();
-  ui.toast(q.final ? 'חלק 2 הושלם' : `משימה חדשה: ${q.title}`, 'quest', 4);
+  ui.toast(q.final ? `Part ${q.part - 1} complete` : `New mission: ${q.title}`, 'quest', 4);
   if (q.start) api.thought(q.start.thought, 4.2, q.start.delay || 0.8);
 }
 
@@ -502,9 +535,8 @@ function persist() {
 // ------------------------------------------------------------------ screens & flow
 function partLabel(s) {
   const q = QUESTS[Math.min(s.questIndex, QUESTS.length - 1)];
-  if (q.final) return 'חלק 2 הושלם';
-  const first = q.part === 1 ? 0 : 6;
-  return `חלק ${q.part} · משימה ${s.questIndex - first + 1}`;
+  if (q.final) return `Part ${q.part - 1} complete`;
+  return `Part ${q.part} · Mission ${s.questIndex - PART_START[q.part] + 1}`;
 }
 
 // main lobby on the beach (the forest is left behind if the player was there)
@@ -516,6 +548,7 @@ async function showTitle() {
   seq.clear();
   game.anims.length = 0;
   ['hud', 'pause', 'endcard', 'keypad', 'final-entry', 'reveal', 'skip-hint'].forEach((id) => ui.show(id, false));
+  audio.setIndoor(0);
   ui.subtitle(null);
   ui.blur(0);
   ui.eyes('hidden');
@@ -523,7 +556,7 @@ async function showTitle() {
   if (game.zone.id !== 'beach') {
     ui.fade(1, 0);
     ui.show('loading', true);
-    ui.setLoading(0, 'חוזר אל החוף…');
+    ui.setLoading(0, 'Back to the beach…');
     await loadZone('beach', (p, t) => ui.setLoading(p, t), loadState() || game.state);
     ui.show('loading', false);
   }
@@ -539,12 +572,12 @@ async function showTitle() {
 function refreshLobbyMenu() {
   const saved = loadState();
   const canContinue = !!(saved && saved.flags.introDone);
-  $('btn-play-label').textContent = canContinue ? 'המשך לשחק' : 'שחק';
-  $('play-note').textContent = canContinue ? `ממשיך מאיפה שעצרת · ${partLabel(saved)}` : 'מתחיל מההתחלה: הטיסה, ההתרסקות והאי';
+  $('btn-play-label').textContent = canContinue ? 'Continue' : 'Play';
+  $('play-note').textContent = canContinue ? `Pick up where you left off · ${partLabel(saved)}` : 'Start from the beginning: the flight, the crash and the island';
   ui.show('btn-new', canContinue);
   $('save-info').textContent = canContinue
-    ? `שמירה אחרונה: ${new Date(saved.savedAt).toLocaleString('he-IL')}`
-    : storageAvailable() ? '' : 'שים לב: הדפדפן חוסם שמירה מקומית — ההתקדמות לא תישמר.';
+    ? `Last saved: ${new Date(saved.savedAt).toLocaleString('en-US')}`
+    : storageAvailable() ? '' : 'Note: your browser blocks local saving, so progress will not be saved.';
 }
 
 // waves and birds behind the lobby; browsers only allow sound after the first click or key press
@@ -569,11 +602,11 @@ function leaveLobby(start) {
   audio.init();
   audio.click();
   ui.fade(1, 0.7);
-  setTimeout(() => {
+  setTimeout(() => portal.commercialBreak(audio).then(() => {
     lobby.leave();
     game.starting = false;
     start();
-  }, 750);
+  }), 750);
 }
 
 async function newGame() {
@@ -616,8 +649,9 @@ async function continueGame() {
   audio.startAmbience();
   audio.resumeAmbience();
   enterPlay();
-  ui.toast('ההתקדמות נטענה', '', 2.5);
+  ui.toast('Progress loaded', '', 2.5);
   checkQuests(); // also resumes a reveal interrupted by a reload
+  chapter3Intro();
 }
 
 function startIntro() {
@@ -654,8 +688,8 @@ function updateWake(dt) {
   once('blink1', 0.6, () => ui.eyes('half'));
   once('blink2', 1.7, () => ui.eyes(''));
   once('blink3', 2.4, () => ui.eyes('open'));
-  once('t1', 2.8, () => ui.thought('...איפה אני?', 2.6));
-  once('t2', 6.0, () => ui.thought('המטוס. התרסקנו.', 2.8));
+  once('t1', 2.8, () => ui.thought('...where am I?', 2.6));
+  once('t2', 6.0, () => ui.thought('The plane. We crashed.', 2.8));
   ui.blur(Math.max(0, 10 - t * 2.2));
   // the Stand_Up clip is scrubbed by `lying`: still on the sand, then up over ~4.6 s
   player.lying = Math.max(0.0001, 1 - Math.min(1, Math.max(0, (t - 4.2) / 4.6)));
@@ -748,7 +782,7 @@ function startReveal() {
   const en = $('reveal-en'), he = $('reveal-he');
   en.textContent = '';
   he.classList.remove('show');
-  he.textContent = 'ההתרסקות לא הייתה תאונה.';
+  he.textContent = 'Someone planned this.';
   ui.show('reveal', true);
   const text = 'THE CRASH WAS NO ACCIDENT.';
   let i = 0;
@@ -778,7 +812,7 @@ function startReveal() {
     // point the camera toward the signal above the jungle
     player.camYaw = Math.atan2(player.pos.x - 8, player.pos.z + 178);
     player.camPitch = 0.05;
-    api.thought('אור אדום, מהבהב, מעל היער. מישהו משדר.', 4.5, 0.9);
+    api.thought('A red light, blinking, above the forest. Someone is transmitting.', 4.5, 0.9);
     setTimeout(() => showEndcard(1), 5200);
   }, 9000);
 }
@@ -789,21 +823,42 @@ function showEndcard(part) {
   releasePointer();
   const s = game.state;
   if (part === 1) {
-    $('end-kicker').textContent = 'סוף חלק 1';
-    $('end-title').textContent = 'ההתרסקות';
-    $('end-obj').innerHTML = 'משימה חדשה: <span dir="ltr">Find the source of the signal in the forest.</span>';
-    $('btn-keep').textContent = 'המשך לחלק 2';
+    $('end-kicker').textContent = 'End of Part 1';
+    $('end-title').textContent = 'The Crash';
+    $('end-obj').innerHTML = 'New mission: Find the source of the signal in the forest.';
+    $('btn-keep').textContent = 'Continue to Part 2';
+  } else if (part === 2) {
+    $('end-kicker').textContent = 'End of Part 2';
+    $('end-title').textContent = 'The Signal';
+    $('end-obj').innerHTML = '<span class="end-en">Someone is still here.</span><br>The lights in the forest came on, and the signal moved north.';
+    $('btn-keep').textContent = 'Continue to Part 3';
   } else {
-    $('end-kicker').textContent = 'סוף חלק 2';
-    $('end-title').textContent = 'האות';
-    $('end-obj').innerHTML = '<span dir="ltr" class="end-en">Someone is still here.</span><br>האורות ביער נדלקו. הסיפור ממשיך בחלק 3.';
-    $('btn-keep').textContent = 'המשך לחקור';
+    $('end-kicker').textContent = 'Chapter 3 complete';
+    $('end-title').textContent = 'The Observer';
+    $('end-obj').innerHTML = '<span class="end-en">“Someone has been watching.”</span><br><span class="end-protocol">NIGHTJAR PROTOCOL — PHASE 3 ACTIVATED</span>';
+    $('btn-keep').textContent = 'Keep exploring';
   }
-  $('end-stats').textContent = `${s.clues.length} רשומות בחוברת · ${s.hintsUsed || 0} רמזים · ההתקדמות נשמרה`;
+  $('end-stats').textContent = `${s.clues.length} booklet entries · ${s.hintsUsed || 0} hints · progress saved`;
   ui.show('endcard', true);
 }
 
-$('btn-keep').addEventListener('click', () => { ui.show('endcard', false); setMode('play'); updateLockHint(); requestPointer(); });
+$('btn-keep').addEventListener('click', () => {
+  ui.show('endcard', false);
+  portal.commercialBreak(audio).then(() => { setMode('play'); updateLockHint(); requestPointer(); chapter3Intro(); });
+});
+
+// the chapter 3 title, once, when the player first plays on after the Part 2 ending
+function chapter3Intro() {
+  const s = game.state;
+  if (s.flags.ch3Intro || s.questIndex !== questById('north')) return;
+  s.flags.ch3Intro = true;
+  persist();
+  setTimeout(() => {
+    ui.titleCard('Chapter 3', 'The Observer');
+    audio.signalBeeps();
+    setTimeout(() => ui.toast('Objective: Follow the northbound signal.', 'quest', 5), 2600);
+  }, 600);
+}
 $('btn-end-main').addEventListener('click', () => { persist(); ui.show('endcard', false); showTitle(); });
 
 // ------------------------------------------------------------------ pause & settings
@@ -811,7 +866,7 @@ function pause() {
   if (game.mode !== 'play') return;
   setMode('paused');
   persist();
-  $('pause-title').textContent = 'הפסקה';
+  $('pause-title').textContent = 'Paused';
   ui.show('pause-menu', true);
   ui.show('btn-settings-back', false);
   ui.show('pause', true);
@@ -881,7 +936,7 @@ $('btn-new').addEventListener('click', () => {
   if (saved && saved.flags.introDone) confirmNew(() => leaveLobby(newGame)); else leaveLobby(newGame);
 });
 $('btn-title-settings').addEventListener('click', () => {
-  $('pause-title').textContent = 'הגדרות';
+  $('pause-title').textContent = 'Settings';
   ui.show('pause-menu', false);
   ui.show('btn-settings-back', true);
   ui.show('pause', true);
@@ -889,7 +944,7 @@ $('btn-title-settings').addEventListener('click', () => {
 $('btn-settings-back').addEventListener('click', () => ui.show('pause', false));
 
 function confirmNew(onYes) {
-  $('confirm-text').textContent = 'להתחיל משחק חדש? ההתקדמות השמורה בשני החלקים תימחק.';
+  $('confirm-text').textContent = 'Start a new game? Your saved progress in every part will be deleted.';
   ui.show('confirm', true);
   $('confirm-yes').onclick = () => { ui.show('confirm', false); onYes(); };
   $('confirm-no').onclick = () => ui.show('confirm', false);
@@ -962,7 +1017,7 @@ window.addEventListener('keydown', (e) => {
       break;
     case 'KeyF':
       if (game.mode === 'play') {
-        if (!has('flashlight')) { ui.toast('עוד לא מצאתי פנס. אולי בין שברי המטוס.', 'warn'); break; }
+        if (!has('flashlight')) { ui.toast('I haven\'t found a flashlight yet. Maybe in the wreckage.', 'warn'); break; }
         setFlashlight(!player.flashlightOn);
         audio.flashlight();
       }
@@ -997,19 +1052,22 @@ function onBoundary(type) {
   if (game.boundaryCooldown > 0 || !game.zone) return;
   game.boundaryCooldown = 4;
   const forest = game.zone.id === 'forest';
-  const msg = forest ? {
-    forest: 'הסבך צפונה סמיך מדי. האורות... רחוקים יותר ממה שנראה.',
-    sea: 'השביל חזרה אל החוף נמצא דרומה, באמצע.',
-    side: 'הסבך סמיך מדי לעבור כאן.',
-    cliff: 'תלול מדי לטפס. אולי יש עלייה במקום אחר.',
+  const north = game.zone.boundaryText && game.zone.boundaryText(type, game.state);
+  const msg = north || (forest ? {
+    forest: game.state.flags.endingSeen
+      ? 'Too dense here. The lights are to the north-east: the trail past the camp leads that way.'
+      : 'The thicket to the north is too dense. The lights... are farther than they look.',
+    sea: 'The trail back to the beach is to the south, in the middle.',
+    side: 'The thicket is too dense to get through here.',
+    cliff: 'Too steep to climb. Maybe there is a way up somewhere else.',
   }[type] : {
     forest: game.state.questIndex >= 6
-      ? 'הסבך כאן סמיך מדי. השביל הצפוני, מאחורי זנב המטוס, נכנס ליער.'
-      : 'הג׳ונגל סבוך מדי. קודם כדאי להבין מה קרה כאן.',
-    sea: 'המים עמוקים מדי. אין טעם לשחות בלי לדעת לאן.',
-    side: 'הסלעים תלולים מדי לטיפוס.',
-    cliff: 'תלול מדי לטפס כאן.',
-  }[type];
+      ? 'The thicket is too dense here. The north trail, behind the tail, leads into the forest.'
+      : 'The jungle is too thick. First I should figure out what happened here.',
+    sea: 'The water is too deep. No point swimming without knowing where to.',
+    side: 'The rocks are too steep to climb.',
+    cliff: 'Too steep to climb here.',
+  }[type]);
   ui.thought(msg, 3);
 }
 
@@ -1068,6 +1126,7 @@ function step(dt) {
   zone.update(dt, game.time, player.pos, camera);
   audio.updateListener(camera);
   const amb = zone.ambience(player.pos);
+  audio.setIndoor(amb.indoor || 0, amb.hum ?? 1);
   audio.updateAmbience(game.time, amb.sea, amb.forest, env.mode === 'night' ? 1 : 0, amb.stream);
   minimap.update(player.pos, player.camYaw, player.facing, game.state);
 }
@@ -1103,7 +1162,7 @@ function updatePlay(dt) {
   game.focused = best;
   if (best) tip('interact');
   if (best) ui.setPrompt(best.label(), best.locked ? best.locked() : false);
-  else if (player.sitting) ui.setPrompt('קום');
+  else if (player.sitting) ui.setPrompt('Stand up');
   else ui.setPrompt(null);
 
   // item glints bob

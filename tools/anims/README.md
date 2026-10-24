@@ -27,3 +27,8 @@ run clips whenever the survivor has the flashlight.
 `falling` (the first 3.3 s of Mixamo's Falling, the airborne loop: `convert.mjs Falling.fbx Falling 3.3`)
 plays while the survivor drops more than 1 m off a cliff; `fall_land` (Fall A Land To Standing Idle 02)
 plays on landing after a fall of more than 2 m.
+
+## Jumps
+
+Space picks the jump: `jump` (two-handed, flashlight out), `running_jump` (Jump 1.fbx, a running leap,
+when moving) or `forward_jump` (Forward Jump.fbx trimmed to 2.1 s, a standing jump forward).
