@@ -5,8 +5,10 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { clothTex } from './gfx/textures.js';
 import { SKINS, DEFAULT_SKIN, skinById } from './data/skins.js';
+import { loadTorch } from './gfx/torch.js';
 
 const tmpV = new THREE.Vector3();
+const tmpAim = new THREE.Vector3();
 const MODEL_URL = './models/survivor.glb';
 // extra clips (tools/anims/README.md); a clip here replaces survivor.glb's clip of the same name
 const ANIM_URLS = ['./models/anims/start_walking.glb'];
@@ -16,6 +18,13 @@ const START_WALK_RATE = 1.7; // Start_Walking is a slower stroll than Walking: s
 const START_WALK_END = 1.3; // clip time where the first steps are done and the walk cycle takes over
 const CLIP_WALK = 1.63 * SCALE * 100, CLIP_RUN = 4.0 * SCALE * 100; // ground speed the walk / run clips were authored at
 const HIPS = 'mixamorig10Hips';
+// the flashlight beam: a focused bright core with soft edges (penumbra) and a gentle falloff (decay below the physical 2
+// keeps 10–20 m readable without burning out the ground at the feet); outside the cone the night stays dark
+export const TORCH_POWER = 450; // candela
+const TORCH_RANGE = 36, TORCH_ANGLE = 0.5, TORCH_PENUMBRA = 0.5, TORCH_DECAY = 1;
+const TORCH_NEAR = 3; // when the beam's core meets the ground closer than this (m), it dims so the spot is not blown out
+const TORCH_PITCH = [-1.3, 1.0]; // how far the beam can be aimed down / up (radians)
+const TORCH_REACH = 1.75; // the beam swings at most this far (radians) from the way the body faces
 const ease = (k) => k * k * (3 - 2 * k);
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
 const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
@@ -60,25 +69,40 @@ export class Player {
     this.still = true;
     this.bandageOn = false;
 
-    this.flashlight = new THREE.SpotLight(0xfff1d6, 0, 28, 0.42, 0.45, 1.2);
-    this.flashlight.position.set(0.2, 1.3, 0.25);
-    this.flashlight.target.position.set(0, 0.6, 6);
-    this.model.root.add(this.flashlight, this.flashlight.target);
+    // one spot light, carried in the right hand and aimed with the camera (mouse): see updateFlashlight
+    this.flashlight = new THREE.SpotLight(0xfff3e0, 0, TORCH_RANGE, TORCH_ANGLE, TORCH_PENUMBRA, TORCH_DECAY);
+    this.flashlight.shadow.mapSize.set(512, 512);
+    this.flashlight.shadow.camera.near = 0.15;
+    this.flashlight.shadow.camera.far = TORCH_RANGE;
+    this.flashlight.shadow.bias = -0.0004;
+    this.flashlight.shadow.normalBias = 0.02;
+    scene.add(this.flashlight, this.flashlight.target);
     this.flashlightOn = false;
+    this.torch = new THREE.Group(); // the flashlight model in the hand (shown while it is on)
+    this.torch.visible = false;
+    scene.add(this.torch);
+    this.aimDir = new THREE.Vector3(0, -0.12, 1).normalize();
+    this.followCam = false; // the orbit camera (mouse) drives the aim; cutscenes aim where the body faces
 
     this.ray = new THREE.Raycaster();
   }
 
   // survivor.glb carries the animation clips (shared by every skin) and the default character
   async load(onProgress = () => {}, skinId = DEFAULT_SKIN) {
-    const [gltf, ...extra] = await Promise.all([
+    const [gltf, torch, ...extra] = await Promise.all([
       loadGLB(MODEL_URL, onProgress),
+      loadTorch().catch(() => null), // without the model the beam still works
       // a missing clip file only costs that clip's upgrade: survivor.glb's own version stays
       ...ANIM_URLS.map((url) => loadGLB(url).catch((err) => { console.warn(err); return null; })),
     ]);
     const clips = new Map(gltf.animations.map((c) => [c.name, c]));
     for (const g of extra) if (g) for (const c of g.animations) clips.set(c.name, c);
     this.clips = [...clips.values()];
+    if (torch) {
+      torch.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = true; o.material.emissive.setHex(0xfff0d8); this.torchLens = o.material; } });
+      this.torch.add(torch);
+      this.setFlashlight(this.flashlightOn);
+    }
     this.baseHipsY = gltf.scene.getObjectByName(HIPS).position.y;
     this.skins = { [SKINS[0].id]: Promise.resolve(this.prepareSkin(gltf.scene, SKINS[0])) };
     this.yawDelta = { Walking_Turn_180: -3.12, Climbing_Down: -1.55, Start_Climbing_Ladder: 3.1 }; // body turn at the end of a clip
@@ -138,7 +162,7 @@ export class Player {
     mesh.getObjectByName('mixamorig10RightForeArm').add(bandage);
     mesh.updateMatrixWorld(true);
     const unit = hips.parent.getWorldScale(new THREE.Vector3()).x; // metres per hips-track unit
-    return { skin, mesh, clips, bandage, hips, unit, head: mesh.getObjectByName('mixamorig10Head') };
+    return { skin, mesh, clips, bandage, hips, unit, head: mesh.getObjectByName('mixamorig10Head'), hand: mesh.getObjectByName('mixamorig10RightHand'), k };
   }
 
   // wear a skin: swaps the character mesh and rebuilds the animation mixer for its skeleton
@@ -155,6 +179,8 @@ export class Player {
     rec.bandage.visible = this.bandageOn;
     this.hips = rec.hips;
     this.head = rec.head;
+    this.hand = rec.hand;
+    this.handK = rec.k;
     this.skinId = rec.skin.id;
 
     this.mixer = new THREE.AnimationMixer(mesh);
@@ -222,8 +248,57 @@ export class Player {
 
   setFlashlight(on) {
     this.flashlightOn = on;
-    this.flashlight.intensity = on ? 40 : 0;
+    this.flashlight.intensity = this.torchPower();
+    // the light stays in the scene (no shader rebuild on F); while off its shadow map is not redrawn
+    this.flashlight.shadow.autoUpdate = on;
+    this.torch.visible = on && this.torch.children.length > 0;
+    if (this.torchLens) this.torchLens.emissiveIntensity = on ? 1.2 : 0;
   }
+
+  // flashlight shadows follow the game's shadow setting (one extra 512² pass while the light is on)
+  setFlashlightShadows(on) { this.flashlight.castShadow = on; }
+
+  // the beam goes where the camera looks: mouse left/right turns it, mouse up/down raises and lowers it
+  updateFlashlight(dt) {
+    if (!this.flashlightOn) { this.followCam = false; return; }
+    const want = tmpAim;
+    if (this.followCam) {
+      // the default camera pitch (0.32) aims a little down, at the ground ~10 m ahead
+      const e = Math.max(TORCH_PITCH[0], Math.min(TORCH_PITCH[1], (0.32 - this.camPitch) * 1.5 - 0.12));
+      let yaw = this.camYaw + Math.PI;
+      const d = wrap(yaw - this.facing);
+      if (Math.abs(d) > TORCH_REACH) yaw = this.facing + Math.sign(d) * TORCH_REACH;
+      want.set(Math.sin(yaw) * Math.cos(e), Math.sin(e), Math.cos(yaw) * Math.cos(e));
+    } else {
+      want.set(Math.sin(this.facing), -0.12, Math.cos(this.facing)).normalize();
+    }
+    this.followCam = false;
+    this.aimDir.lerp(want, Math.min(1, dt * 14)).normalize();
+    // the flashlight sits in the right hand's grip and points along the aim
+    this.model.root.updateMatrixWorld(true);
+    const t = this.torch;
+    if (this.hand) this.hand.localToWorld(t.position.set(0, 8.5 * this.handK, 2.5 * this.handK));
+    else t.position.copy(this.pos).add(tmpV.set(0, 1.1, 0));
+    t.lookAt(tmpV.copy(t.position).add(this.aimDir));
+    t.updateMatrixWorld();
+    // the light leaves from the lens, just clear of the hand so the arm does not shadow it
+    this.flashlight.position.copy(t.position).addScaledVector(this.aimDir, 0.14);
+    this.flashlight.target.position.copy(this.flashlight.position).add(this.aimDir);
+    this.flashlight.target.updateMatrixWorld();
+    // where the lower edge of the bright core meets the ground: a close hit dims the beam (an eye adapting to the spot)
+    const o = this.flashlight.position, a = this.aimDir;
+    const h = Math.hypot(a.x, a.z), e = Math.atan2(a.y, h) - TORCH_ANGLE * (1 - TORCH_PENUMBRA);
+    const ex = h > 1e-4 ? a.x / h * Math.cos(e) : 0, ez = h > 1e-4 ? a.z / h * Math.cos(e) : 0, ey = Math.sin(e);
+    let hit = TORCH_NEAR;
+    for (let d = 0.25; d < TORCH_NEAR; d += 0.25) {
+      if (o.y + ey * d < this.heightAt(o.x + ex * d, o.z + ez * d)) { hit = d; break; }
+    }
+    this.torchDim = Math.max(0.15, (hit / TORCH_NEAR) ** 1.5);
+    this.flashlight.intensity = this.torchPower();
+  }
+
+  // the beam's current strength (TORCH_POWER, dimmed for a close spot; main.js flickers it)
+  torchPower() { return this.flashlightOn ? TORCH_POWER * (this.torchDim ?? 1) * (this.flicker ?? 1) : 0; }
 
   showBandage(v) {
     this.bandageOn = v;
@@ -385,9 +460,16 @@ export class Player {
     this.breathT = Math.max(0, this.breathT - dt);
     this.breathK += ((this.breathT > 0 ? 1 : 0) - this.breathK) * Math.min(1, dt * 2);
 
+    // standing with the flashlight on: the survivor turns to face where the beam is aimed
+    if (this.flashlightOn && this.followCam && controlEnabled && !this.busy && !holdFacing && !(mx || mz)) {
+      const d = wrap(this.camYaw + Math.PI - this.facing);
+      if (Math.abs(d) > 0.9) this.facing += d * Math.min(1, dt * 4);
+    }
+
     this.animate(dt);
     this.model.root.position.copy(this.pos);
     this.model.root.rotation.y = this.facing;
+    this.updateFlashlight(dt);
   }
 
   animate(dt) {
@@ -566,5 +648,6 @@ export class Player {
     if (camPos.y < gh) camPos.y = gh;
     this.camera.position.copy(camPos);
     this.camera.lookAt(origin.x, origin.y - 0.1, origin.z);
+    this.followCam = true;
   }
 }

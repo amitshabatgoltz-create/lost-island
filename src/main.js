@@ -831,6 +831,7 @@ function applyQuality() {
 function applyShadowSetting() {
   renderer.shadowMap.enabled = settings.shadows;
   env.setShadows(settings.shadows);
+  if (player) player.setFlashlightShadows(settings.shadows);
   env.scene.traverse((o) => { if (o.material) [].concat(o.material).forEach((m) => (m.needsUpdate = true)); });
 }
 
@@ -1052,7 +1053,7 @@ function step(dt) {
   // flashlight flicker (tension beats)
   if (game.flicker > 0) {
     game.flicker -= dt;
-    if (player.flashlightOn) player.flashlight.intensity = game.flicker > 0 ? (Math.random() < 0.45 ? 0 : 15 + Math.random() * 30) : 40;
+    player.flicker = game.flicker > 0 ? (Math.random() < 0.45 ? 0 : 0.35 + Math.random() * 0.75) : 1;
   }
   env.update(dt, game.time, player.pos, camera);
   zone.update(dt, game.time, player.pos, camera);
