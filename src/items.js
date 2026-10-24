@@ -1,5 +1,6 @@
 // 3D models for every collectible / interactive object (procedural geometry + canvas textures).
 import * as THREE from 'three';
+import { loadTorch } from './gfx/torch.js';
 
 export const SYMBOL_SVG = `
 <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" class="sym">
@@ -68,20 +69,21 @@ export function createItemMesh(id) {
       break;
     }
     case 'flashlight': {
+      // the real flashlight model, lying on its side (a plain stand-in shows until it has loaded)
       const inner = new THREE.Group();
-      const body = new THREE.Mesh(new THREE.CylinderGeometry(0.036, 0.036, 0.24, 14), std({ color: 0x1b1d20, roughness: 0.4, metalness: 0.6 }));
-      const head = new THREE.Mesh(new THREE.CylinderGeometry(0.058, 0.04, 0.08, 16), std({ color: 0x2a2d31, roughness: 0.3, metalness: 0.7 }));
-      head.position.y = 0.16;
-      const lens = new THREE.Mesh(new THREE.CircleGeometry(0.052, 16), std({ color: 0xfff6d8, emissive: 0xfff1c0, emissiveIntensity: 0.4, roughness: 0.1 }));
-      lens.position.y = 0.201;
-      lens.rotation.x = -Math.PI / 2;
-      const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.038, 0.038, 0.1, 14), std({ color: 0x3b2f1f, roughness: 0.9 }));
-      grip.position.y = -0.05;
-      inner.add(body, head, lens, grip);
-      inner.rotation.z = Math.PI / 2 - 0.1;
-      inner.position.y = 0.06;
+      const stand = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.026, 0.22, 12), std({ color: 0x1b1d20, roughness: 0.4, metalness: 0.6 }));
+      stand.rotation.x = Math.PI / 2;
+      inner.add(stand);
+      inner.rotation.y = 0.1;
+      inner.position.y = 0.026;
       g.add(inner);
-      g.scale.setScalar(1.7);
+      loadTorch().then((m) => {
+        m.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.material.emissive.setHex(0xfff0d8); o.material.emissiveIntensity = 0.6; } });
+        inner.remove(stand);
+        stand.geometry.dispose();
+        inner.add(m);
+      }).catch(() => {});
+      g.scale.setScalar(1.25);
       break;
     }
     case 'bandage': {
