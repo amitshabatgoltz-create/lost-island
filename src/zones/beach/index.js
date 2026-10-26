@@ -14,6 +14,7 @@ import { MINIMAP } from './minimap.js';
 import { RESOURCE_NODES } from '../../data/resources.js';
 import { terrainMaterial, bakeContactShade, vegetationMaterials, triplanar, scaleUV, shadeSpotsFromColliders } from '../../gfx/materials.js';
 import { sandTex, grassTex, dirtTex, rockTex, rippleNormal, panelTex } from '../../gfx/textures.js';
+import { T } from '../../i18n/index.js';
 
 const yieldFrame = () => new Promise((r) => setTimeout(r, 0));
 
@@ -26,30 +27,30 @@ export async function build(env, api, onProgress = () => {}) {
   const updaters = [];
   const rnd = mulberry32(1337);
 
-  onProgress(0.15, 'Island terrain');
+  onProgress(0.15, T('Island terrain'));
   const terrain = buildTerrain();
   group.add(terrain);
   await yieldFrame();
 
-  onProgress(0.3, 'The sea');
+  onProgress(0.3, T('The sea'));
   group.add(buildSea(shared));
   await yieldFrame();
 
-  onProgress(0.42, 'Plane wreckage');
+  onProgress(0.42, T('Plane wreckage'));
   const wreck = buildWreck(group, colliders, occluders, updaters, rnd);
   await yieldFrame();
 
-  onProgress(0.55, 'Rocks');
+  onProgress(0.55, T('Rocks'));
   buildRocks(group, colliders, occluders, rnd);
   await yieldFrame();
 
-  onProgress(0.68, 'Jungle and plants');
+  onProgress(0.68, T('Jungle and plants'));
   buildVegetation(group, colliders, shared, rnd);
   await yieldFrame();
 
   bakeContactShade(terrain, shadeSpotsFromColliders(colliders));
 
-  onProgress(0.82, 'The signal');
+  onProgress(0.82, T('The signal'));
   const signal = buildSignalMast(group);
   const peak = new THREE.Mesh(
     new THREE.ConeGeometry(90, 95, 9, 3),
@@ -72,10 +73,10 @@ export async function build(env, api, onProgress = () => {}) {
     floaters.push(m);
   });
 
-  onProgress(0.86, 'The camp');
+  onProgress(0.86, T('The camp'));
   const base = buildBaseCamp(group, colliders, occluders, heightAt, LAYOUT.base);
 
-  onProgress(0.9, 'Placing items');
+  onProgress(0.9, T('Placing items'));
   await yieldFrame();
 
   function waveHeight(x, z, t) {

@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { fbm } from '../../noise.js';
 import { triplanar } from '../../gfx/materials.js';
 import { rockTex } from '../../gfx/textures.js';
+import { T } from '../../i18n/index.js';
 
 const rot2 = (lx, lz, r) => ({ x: lx * Math.cos(r) + lz * Math.sin(r), z: -lx * Math.sin(r) + lz * Math.cos(r) });
 const ROCK = { hw: 2.5, hd: 2.2, height: 2.0 }; // main block (local x / z half sizes), top above the highest ground under it
@@ -94,25 +95,25 @@ export function buildClimbs(ctx, L, logs) {
       {
         id: 'lookoutUp', kind: 'examine', x: upFrom.x, z: upFrom.z, radius: 1.6,
         available: () => !onTop(),
-        label: () => 'Climb the rock',
+        label: () => T('Climb the rock'),
         use: () => p().climb('Climbing_1', upFrom, { ...upTo, y: top }, yawZ, {
           onDone: () => {
             if (sawView) return;
             sawView = true;
-            api.thought('From here you can see over the bushes. To the east, the ridge, and on it something under a camouflage net.', 4.5);
+            api.thought(T('From here you can see over the bushes. To the east, the ridge, and on it something under a camouflage net.'), 4.5);
           },
         }),
       },
       {
         id: 'lookoutDown', kind: 'examine', x: downFrom.x, z: downFrom.z, radius: 1.4,
         available: () => onTop(),
-        label: () => 'Climb down',
+        label: () => T('Climb down'),
         use: () => p().climb('Climbing_Down', { ...downFrom, y: top }, downTo, yawX),
       },
       {
         id: 'lookoutStep', kind: 'examine', x: stepFrom.x, z: stepFrom.z, radius: 1.3,
         available: () => p().pos.y < stepTop - 0.4,
-        label: () => 'Climb the boulder',
+        label: () => T('Climb the boulder'),
         use: () => p().climb('Start_Climbing_Ladder', stepFrom, { ...stepTo, y: stepTop }, yawZ + Math.PI),
       },
     ];
@@ -125,7 +126,7 @@ export function buildClimbs(ctx, L, logs) {
         list.push({
           id: `log${i}${side > 0 ? 'a' : 'b'}`, kind: 'examine', x: a.x, z: a.z, radius: 1.2,
           available: () => true,
-          label: () => 'Climb over the log',
+          label: () => T('Climb over the log'),
           use: () => p().climb('Climbing', a, b, Math.atan2(b.x - a.x, b.z - a.z), { timeScale: 1.25 }),
         });
       }

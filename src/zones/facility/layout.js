@@ -1,14 +1,15 @@
 // The NIGHTJAR observation facility N-1 (Part 3), inside the mountain behind the bunker door.
 // Own coordinate space: floor at y = 0, the entrance corridor runs north (-Z) from the door at z = 16.
+import { T } from '../../i18n/index.js';
 export const H = 3.0; // ceiling height
 
 // rooms: axis-aligned rectangles [minX, maxX, minZ, maxZ]
 export const ROOMS = {
-  corridor: { name: 'Entrance corridor', r: [-1.5, 1.5, 0, 16] },
-  checkpoint: { name: 'Security checkpoint', r: [-6, 6, -6, 0] },
-  observation: { name: 'Observation room', r: [-8, 8, -20, -6] },
-  archive: { name: 'Records archive', r: [6, 16, -5, 4] },
-  control: { name: 'Restricted control', r: [-18, -8, -20, -10] },
+  corridor: { name: T('Entrance corridor'), r: [-1.5, 1.5, 0, 16] },
+  checkpoint: { name: T('Security checkpoint'), r: [-6, 6, -6, 0] },
+  observation: { name: T('Observation room'), r: [-8, 8, -20, -6] },
+  archive: { name: T('Records archive'), r: [6, 16, -5, 4] },
+  control: { name: T('Restricted control'), r: [-18, -8, -20, -10] },
 };
 
 // doors between rooms: wall axis, position along the wall, half width, and what opens them

@@ -2,6 +2,7 @@
 // Places appear only after the story has led the player to them (the forest has no compass on purpose).
 import { streamZ } from './terrain.js';
 import { FL, FPATHS, CLEARINGS } from './layout.js';
+import { T } from '../../i18n/index.js';
 
 const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
@@ -9,7 +10,7 @@ const FLOOR = [46, 78, 44], CLEAR = [96, 104, 64], WATER = [40, 92, 112], ROCK =
 const has = (s, id) => s.collected.includes(id);
 
 export const MINIMAP = {
-  title: 'THE FOREST',
+  title: T('THE FOREST'),
   margin: 24,
   ground(x, z, h, slope) {
     if (Math.abs(z - streamZ(x)) < 2.6) return WATER;

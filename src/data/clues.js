@@ -1,13 +1,14 @@
 // Booklet entries. Order = order of slots in the booklet. `part` groups them under a heading.
 // `desc` may be a function of the game state (entries that fill in as the player discovers more).
 import { CARVINGS, symbolName, SYMBOLS, WIRING_RULES } from './puzzles.js';
+import { T } from '../i18n/index.js';
 
-const notchWord = (n) => ['', 'one notch', 'two notches', 'three notches'][n];
+const notchWord = (n) => ['', T('one notch'), T('two notches'), T('three notches')][n];
 export const BOOKLET_MESSAGE = 'If you are reading this, the plan went wrong.';
 export const FINAL_ENTRY = 'Someone is still here.';
 export const LOCKED_FUTURE_SLOTS = 2; // pages for Part 4
 
-const PHOTO_SVG = `<svg viewBox="0 0 300 200" class="clue-art" role="img" aria-label="Photo: the island from the sea and a person in a raincoat">
+const PHOTO_SVG = T`<svg viewBox="0 0 300 200" class="clue-art" role="img" aria-label="Photo: the island from the sea and a person in a raincoat">
   <defs><filter id="grain"><feTurbulence baseFrequency="0.9" numOctaves="2" seed="4"/><feColorMatrix values="0 0 0 0 0.3  0 0 0 0 0.25  0 0 0 0 0.18  0 0 0 0.22 0"/><feComposite in2="SourceGraphic" operator="in"/></filter></defs>
   <rect x="6" y="6" width="288" height="188" fill="#c9b48e" stroke="#f1e8d4" stroke-width="10"/>
   <rect x="11" y="11" width="278" height="110" fill="#b39a72"/>
@@ -22,7 +23,7 @@ const PHOTO_SVG = `<svg viewBox="0 0 300 200" class="clue-art" role="img" aria-l
   <rect x="6" y="6" width="288" height="188" filter="url(#grain)" opacity="0.9"/>
 </svg>`;
 
-const CAMP_MAP_SVG = `<svg viewBox="0 0 300 220" class="clue-art" role="img" aria-label="Hand-drawn map of the forest">
+const CAMP_MAP_SVG = T`<svg viewBox="0 0 300 220" class="clue-art" role="img" aria-label="Hand-drawn map of the forest">
   <rect x="4" y="4" width="292" height="212" rx="3" fill="#ddd0ae" stroke="#9a835f" stroke-width="2"/>
   <path d="M20 200 Q90 186 150 198 T282 192" fill="none" stroke="#5a4630" stroke-width="2" stroke-dasharray="5 4"/>
   <text x="200" y="212" font-size="10" fill="#5a4630" font-family="monospace">SHORE</text>
@@ -53,129 +54,129 @@ const FRAGMENT_SVG = `<svg viewBox="0 0 300 200" class="clue-art" role="img" ari
 export const CLUES = [
   // ---------------- Part 1
   {
-    id: 'booklet', part: 1, title: 'The Booklet',
-    desc: 'A black leather cover with a symbol I have never seen: a broken circle, a vertical line and two dots. Inside: a partial map of the island and one handwritten line.',
-    note: 'Who carries a map of an island nobody is supposed to know?',
+    id: 'booklet', part: 1, title: T('The Booklet'),
+    desc: T('A black leather cover with a symbol I have never seen: a broken circle, a vertical line and two dots. Inside: a partial map of the island and one handwritten line.'),
+    note: T('Who carries a map of an island nobody is supposed to know?'),
   },
   {
-    id: 'ticket', part: 1, title: 'Torn Boarding Pass',
-    desc: 'A boarding pass, flight NV 2207, seat 31A. The part with the passenger\'s name is torn off.',
-    note: '31A is the seat next to mine. It was empty the whole flight. Someone booked it and never boarded.',
+    id: 'ticket', part: 1, title: T('Torn Boarding Pass'),
+    desc: T('A boarding pass, flight NV 2207, seat 31A. The part with the passenger\'s name is torn off.'),
+    note: T('31A is the seat next to mine. It was empty the whole flight. Someone booked it and never boarded.'),
   },
   {
-    id: 'device', part: 1, title: 'Memory Device',
-    desc: 'A small device with the same symbol engraved on it. A blue light is still blinking. A label on the side says: CACHE / TAIL.',
-    note: 'TAIL: the tail. The back of the plane fell near the edge of the forest.',
+    id: 'device', part: 1, title: T('Memory Device'),
+    desc: T('A small device with the same symbol engraved on it. A blue light is still blinking. A label on the side says: CACHE / TAIL.'),
+    note: T('TAIL: the tail. The back of the plane fell near the edge of the forest.'),
   },
   {
-    id: 'document', part: 1, title: 'Internal Document',
-    desc: 'A printed page in a plastic sleeve, carrying the symbol. Date: September 14, nine days before the flight. Subject: NV 2207 / 23 SEP. “Route deviation approved.” The rest is blacked out.',
-    note: 'They knew about my flight nine days ahead. They knew where it would end up.',
+    id: 'document', part: 1, title: T('Internal Document'),
+    desc: T('A printed page in a plastic sleeve, carrying the symbol. Date: September 14, nine days before the flight. Subject: NV 2207 / 23 SEP. “Route deviation approved.” The rest is blacked out.'),
+    note: T('They knew about my flight nine days ahead. They knew where it would end up.'),
   },
   // ---------------- Part 2
   {
-    id: 'carvings', part: 2, title: 'Carved Symbols',
+    id: 'carvings', part: 2, title: T('Carved Symbols'),
     desc: (s) => {
       const found = CARVINGS.filter((c) => s.flags[c.id]);
       const lines = found.map((c) => `${SYMBOLS.find((x) => x.id === c.symbol).svg.replace('<svg', '<svg class="glyph"')} ${symbolName(c.symbol)} — ${notchWord(c.notches)}`);
-      return 'Symbols carved into tree bark along the tracks leading from the transmitter. Under each symbol: notches.<br><br>' +
-        (lines.length ? lines.join('<br>') : '') + (found.length < CARVINGS.length ? `<br><br><i>Found ${found.length} of ${CARVINGS.length}.</i>` : '');
+      return T('Symbols carved into tree bark along the tracks leading from the transmitter. Under each symbol: notches.<br><br>') +
+        (lines.length ? lines.join('<br>') : '') + (found.length < CARVINGS.length ? T`<br><br><i>Found ${found.length} of ${CARVINGS.length}.</i>` : '');
     },
-    note: 'The same symbols are on the supply crate\'s lock. The notches... maybe an order?',
+    note: T('The same symbols are on the supply crate\'s lock. The notches... maybe an order?'),
   },
   {
-    id: 'serviceCard', part: 2, title: 'Service Card: RELAY 04',
-    desc: 'A laminated card from the supply crate, next to the power cell: “Reconnecting the feed panel. Four terminals, numbered from top (1) to bottom (4).”<br><br>' + WIRING_RULES.map((r, i) => `${i + 1}. ${r}`).join('<br>'),
-    note: 'Only three sentences. Read them right and there is only one way.',
+    id: 'serviceCard', part: 2, title: T('Service Card: RELAY 04'),
+    desc: T('A laminated card from the supply crate, next to the power cell: “Reconnecting the feed panel. Four terminals, numbered from top (1) to bottom (4).”<br><br>') + WIRING_RULES.map((r, i) => `${i + 1}. ${r}`).join('<br>'),
+    note: T('Only three sentences. Read them right and there is only one way.'),
   },
   {
-    id: 'radioLog', part: 2, title: 'Damaged Radio Log',
-    desc: 'When the transmitter woke up, the display printed what was left of its log. Most lines are erased. What remains: “Day 41 — crew left per protocol. One observer remains.” · “Day 52 — window confirmed 02:40. Relay NIGHTJAR, frequency 417.9.” · “Day 53 — do not answer civilian channels.”',
-    note: '417.9, the same number engraved on the transmitter panel. And “one observer”. Someone stayed here on purpose.',
+    id: 'radioLog', part: 2, title: T('Damaged Radio Log'),
+    desc: T('When the transmitter woke up, the display printed what was left of its log. Most lines are erased. What remains: “Day 41 — crew left per protocol. One observer remains.” · “Day 52 — window confirmed 02:40. Relay NIGHTJAR, frequency 417.9.” · “Day 53 — do not answer civilian channels.”'),
+    note: T('417.9, the same number engraved on the transmitter panel. And “one observer”. Someone stayed here on purpose.'),
   },
   {
-    id: 'photo', part: 2, title: 'Photograph',
-    desc: 'A faded photo taken from the sea: the island, the transmitter mast, and in front a person in a dark raincoat with their back to the camera. On the back, in pen: “N. — first week. All according to plan.”',
-    note: 'They stood by the mast where I stood an hour ago. No face, just one letter.',
+    id: 'photo', part: 2, title: T('Photograph'),
+    desc: T('A faded photo taken from the sea: the island, the transmitter mast, and in front a person in a dark raincoat with their back to the camera. On the back, in pen: “N. — first week. All according to plan.”'),
+    note: T('They stood by the mast where I stood an hour ago. No face, just one letter.'),
     art: PHOTO_SVG,
   },
   {
-    id: 'campMap', part: 2, title: 'Hand-drawn Map',
-    desc: 'A map pinned to the wall of the hut. It marks the camp, the relay and the east ridge. At the south end, on the shoreline: a red X and the words LZ-2.',
-    note: 'LZ-2 is exactly where the plane went down. The paper is yellowed: this map was drawn weeks ago.',
+    id: 'campMap', part: 2, title: T('Hand-drawn Map'),
+    desc: T('A map pinned to the wall of the hut. It marks the camp, the relay and the east ridge. At the south end, on the shoreline: a red X and the words LZ-2.'),
+    note: T('LZ-2 is exactly where the plane went down. The paper is yellowed: this map was drawn weeks ago.'),
     art: CAMP_MAP_SVG,
   },
   {
-    id: 'calendar', part: 2, title: 'Calendar from the Hut',
-    desc: 'A calendar on the hut wall, open to September. Two days are circled in red: 14, with “APPROVED” next to it. 23, with “ARRIVAL · LZ-2”.',
-    note: 'September 23 is the day we crashed. And 14... the date on the internal document from the beach.',
+    id: 'calendar', part: 2, title: T('Calendar from the Hut'),
+    desc: T('A calendar on the hut wall, open to September. Two days are circled in red: 14, with “APPROVED” next to it. 23, with “ARRIVAL · LZ-2”.'),
+    note: T('September 23 is the day we crashed. And 14... the date on the internal document from the beach.'),
   },
   {
-    id: 'researchDoc', part: 2, title: 'Research Protocol',
-    desc: 'PROJECT NIGHTJAR — Phase 3 protocol. Date: August 2, seven weeks before the flight. “Phase goal: record the behavior of subjects in full isolation, without their knowledge. Method of entry: unplanned descent. Expected survivors: low. Do not make contact.”',
-    note: 'Subjects. “Unplanned descent.” They call the crash an entry. This island is a lab.',
+    id: 'researchDoc', part: 2, title: T('Research Protocol'),
+    desc: T('PROJECT NIGHTJAR — Phase 3 protocol. Date: August 2, seven weeks before the flight. “Phase goal: record the behavior of subjects in full isolation, without their knowledge. Method of entry: unplanned descent. Expected survivors: low. Do not make contact.”'),
+    note: T('Subjects. “Unplanned descent.” They call the crash an entry. This island is a lab.'),
   },
   {
-    id: 'schedule', part: 2, title: 'Lookout Shift Schedule',
-    desc: 'A muddy shift sheet: “Observer — east ridge. Night shift. Report any movement at LZ-2.” The last line, handwritten: “23/9 · 02:41 — contact.”',
-    note: '02:41. One minute after we crashed. Someone sat on the ridge waiting for us.',
+    id: 'schedule', part: 2, title: T('Lookout Shift Schedule'),
+    desc: T('A muddy shift sheet: “Observer — east ridge. Night shift. Report any movement at LZ-2.” The last line, handwritten: “23/9 · 02:41 — contact.”'),
+    note: T('02:41. One minute after we crashed. Someone sat on the ridge waiting for us.'),
   },
   {
-    id: 'routeChart', part: 2, title: 'Flight Route Chart',
-    desc: 'A printed chart of the NV 2207 route, date-stamped before takeoff. Over the original route someone drew a second line in pencil that turns south, to the island. Next to the turn: “02:14 — systems. 02:40 — descent.” In the margin: “31A — escort. Do not board.”',
-    note: 'They knew the route before the plane took off. And the empty seat next to me: someone bought it so it would stay empty.',
+    id: 'routeChart', part: 2, title: T('Flight Route Chart'),
+    desc: T('A printed chart of the NV 2207 route, date-stamped before takeoff. Over the original route someone drew a second line in pencil that turns south, to the island. Next to the turn: “02:14 — systems. 02:40 — descent.” In the margin: “31A — escort. Do not board.”'),
+    note: T('They knew the route before the plane took off. And the empty seat next to me: someone bought it so it would stay empty.'),
   },
   {
-    id: 'stillHere', part: 2, title: 'Last Entry',
-    desc: 'After the broadcast, the lights in the forest came on one after another, and the red signal moved somewhere else. I wrote in the booklet what I can no longer deny:',
+    id: 'stillHere', part: 2, title: T('Last Entry'),
+    desc: T('After the broadcast, the lights in the forest came on one after another, and the red signal moved somewhere else. I wrote in the booklet what I can no longer deny:'),
     note: 'Someone is still here.',
     noteEn: true,
   },
   // ---------------- Part 3
   {
-    id: 'fieldRecorder', part: 3, title: 'Field Recorder',
-    desc: 'A battered field recorder on a crate at an abandoned tarp camp, the tape still inside. The last entry, in a tired voice: “Day 61. The north door still takes the old badges. GEN-2 has blown its main fuse again. Spares are in the crates on the slope. I am not going back inside. Not after what the screens showed.”',
-    note: 'Someone camped here, next to a door they were afraid to open. A door that takes badges, and a generator that needs a fuse.',
+    id: 'fieldRecorder', part: 3, title: T('Field Recorder'),
+    desc: T('A battered field recorder on a crate at an abandoned tarp camp, the tape still inside. The last entry, in a tired voice: “Day 61. The north door still takes the old badges. GEN-2 has blown its main fuse again. Spares are in the crates on the slope. I am not going back inside. Not after what the screens showed.”'),
+    note: T('Someone camped here, next to a door they were afraid to open. A door that takes badges, and a generator that needs a fuse.'),
   },
   {
-    id: 'mapFragment', part: 3, title: 'The Missing Piece of the Map',
-    desc: 'A soggy piece of paper, half-buried by the trail. Its torn edge matches my booklet map exactly: it is the missing northern part. It shows this valley, the cliff, a mast, and a small square drawn into the rock, crossed out in red: “N-1”.',
-    note: 'Someone tore this off the booklet so that nobody would find the way here. Or so that only one person would.',
+    id: 'mapFragment', part: 3, title: T('The Missing Piece of the Map'),
+    desc: T('A soggy piece of paper, half-buried by the trail. Its torn edge matches my booklet map exactly: it is the missing northern part. It shows this valley, the cliff, a mast, and a small square drawn into the rock, crossed out in red: “N-1”.'),
+    note: T('Someone tore this off the booklet so that nobody would find the way here. Or so that only one person would.'),
     art: FRAGMENT_SVG,
   },
   {
-    id: 'memo', part: 3, title: 'NIGHTJAR — Internal Research Memorandum',
-    desc: '“Project NIGHTJAR remains under restricted observation.<br>The island\'s anomalous conditions continue to interfere with external communications and long-range tracking.<br>All personnel must follow the revised observation protocol.<br>Unauthorized contact with individuals outside the project is prohibited.”<br><br>Distribution: N-1 staff only. Stamped RESTRICTED.',
-    note: '“Anomalous conditions.” That is why no rescue has come. Nobody outside can even find this island.',
+    id: 'memo', part: 3, title: T('NIGHTJAR — Internal Research Memorandum'),
+    desc: T('“Project NIGHTJAR remains under restricted observation.<br>The island\'s anomalous conditions continue to interfere with external communications and long-range tracking.<br>All personnel must follow the revised observation protocol.<br>Unauthorized contact with individuals outside the project is prohibited.”<br><br>Distribution: N-1 staff only. Stamped RESTRICTED.'),
+    note: T('“Anomalous conditions.” That is why no rescue has come. Nobody outside can even find this island.'),
   },
   {
-    id: 'passengerReport', part: 3, title: 'Passenger Classification Report',
-    desc: '“Flight NV 2207 — Restricted Passenger Assessment.<br>Passenger records were reviewed before departure.<br>Several passengers were assigned internal observation classifications.<br>Flight route modification: approved (ref. 14 SEP).<br>Observation window opened: 02:40.<br>Seat 31A: classification restricted. See restricted archive.<br>Additional details require Level 4 authorization.”',
-    note: 'Approved on September 14, the same date as the document by the tail. They sorted us before we even sat down. And 31A again: the empty seat next to mine.',
+    id: 'passengerReport', part: 3, title: T('Passenger Classification Report'),
+    desc: T('“Flight NV 2207 — Restricted Passenger Assessment.<br>Passenger records were reviewed before departure.<br>Several passengers were assigned internal observation classifications.<br>Flight route modification: approved (ref. 14 SEP).<br>Observation window opened: 02:40.<br>Seat 31A: classification restricted. See restricted archive.<br>Additional details require Level 4 authorization.”'),
+    note: T('Approved on September 14, the same date as the document by the tail. They sorted us before we even sat down. And 31A again: the empty seat next to mine.'),
   },
   {
-    id: 'fieldNote', part: 3, title: 'Unfiled Field Note',
-    desc: 'A folded page in the pocket of a dark raincoat, left in a locker at the checkpoint. Pencil, pressed hard: “If the system is still active, someone is still watching. Do not trust a transmission simply because it uses a familiar voice. The observation room is not as isolated as the records claim.” Signed with one letter: “N.”',
-    note: 'A dark raincoat, like the one in the photo from the camp. I still have never seen N.\'s face. And the voice on the radio: “do not trust anyone”... was that N.? Or someone using N.\'s voice?',
+    id: 'fieldNote', part: 3, title: T('Unfiled Field Note'),
+    desc: T('A folded page in the pocket of a dark raincoat, left in a locker at the checkpoint. Pencil, pressed hard: “If the system is still active, someone is still watching. Do not trust a transmission simply because it uses a familiar voice. The observation room is not as isolated as the records claim.” Signed with one letter: “N.”'),
+    note: T('A dark raincoat, like the one in the photo from the camp. I still have never seen N.\'s face. And the voice on the radio: “do not trust anyone”... was that N.? Or someone using N.\'s voice?'),
   },
   {
-    id: 'discrepancies', part: 3, title: 'Personnel and Subject Discrepancies',
-    desc: '“Several individuals listed as transferred remain unaccounted for.<br>Records contain overlapping dates and contradictory arrival reports.<br>Reconciliation of the archive is pending.”<br><br>Attached: a list of names with two arrival dates each, years apart. Some of the dates are after today.',
-    note: 'Arrival dates that have not happened yet. That cannot be a typing mistake, not this many times.',
+    id: 'discrepancies', part: 3, title: T('Personnel and Subject Discrepancies'),
+    desc: T('“Several individuals listed as transferred remain unaccounted for.<br>Records contain overlapping dates and contradictory arrival reports.<br>Reconciliation of the archive is pending.”<br><br>Attached: a list of names with two arrival dates each, years apart. Some of the dates are after today.'),
+    note: T('Arrival dates that have not happened yet. That cannot be a typing mistake, not this many times.'),
   },
   {
-    id: 'file31a', part: 3, title: 'Restricted File — 31A',
-    desc: '“Classification: OBSERVER.<br>Status: Unresolved.<br>Monitoring instructions: Do not disclose the classification to other subjects.<br>Additional records have been transferred to the restricted archive.”<br><br>The photo clip is empty. The name line is blacked out.',
-    note: 'OBSERVER. The seat nobody sat in has the same title as the person who watched us from the ridge. Who was supposed to be in 31A?',
+    id: 'file31a', part: 3, title: T('Restricted File — 31A'),
+    desc: T('“Classification: OBSERVER.<br>Status: Unresolved.<br>Monitoring instructions: Do not disclose the classification to other subjects.<br>Additional records have been transferred to the restricted archive.”<br><br>The photo clip is empty. The name line is blacked out.'),
+    note: T('OBSERVER. The seat nobody sat in has the same title as the person who watched us from the ridge. Who was supposed to be in 31A?'),
   },
   {
-    id: 'recording', part: 3, title: 'Restricted Recording',
-    desc: '“Observation log. Flight NV 2207 has entered the designated observation window. Passenger classifications have been confirmed. The observer designation remains restricted. If the subject reaches the facility, do not initiate direct contact. Repeat: do not initiate direct contact.”<br><br>The rest, recovered from the memory device: “...the subject\'s arrival at N-1 is anticipated. Observation continues from the secondary room. Phase 3 begins when the subject—”',
-    note: 'They knew I would get here. They planned for it. “The subject” is me.',
+    id: 'recording', part: 3, title: T('Restricted Recording'),
+    desc: T('“Observation log. Flight NV 2207 has entered the designated observation window. Passenger classifications have been confirmed. The observer designation remains restricted. If the subject reaches the facility, do not initiate direct contact. Repeat: do not initiate direct contact.”<br><br>The rest, recovered from the memory device: “...the subject\'s arrival at N-1 is anticipated. Observation continues from the secondary room. Phase 3 begins when the subject—”'),
+    note: T('They knew I would get here. They planned for it. “The subject” is me.'),
   },
   {
-    id: 'phase3', part: 3, title: 'Observation Active',
-    desc: 'The big screen in the observation room: “NIGHTJAR SYSTEM · SUBJECT 31A · OBSERVATION ACTIVE · A NEW RECORDING HAS BEEN DETECTED.” Then one voice: “If you can hear this, they\'ve already found you.” Something knocked behind the sealed door. The screen went dark, and one last line stayed on it: NIGHTJAR PROTOCOL — PHASE 3 ACTIVATED.',
+    id: 'phase3', part: 3, title: T('Observation Active'),
+    desc: T('The big screen in the observation room: “NIGHTJAR SYSTEM · SUBJECT 31A · OBSERVATION ACTIVE · A NEW RECORDING HAS BEEN DETECTED.” Then one voice: “If you can hear this, they\'ve already found you.” Something knocked behind the sealed door. The screen went dark, and one last line stayed on it: NIGHTJAR PROTOCOL — PHASE 3 ACTIVATED.'),
     note: 'Someone has been watching.',
     noteEn: true,
   },
