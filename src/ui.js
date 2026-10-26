@@ -581,12 +581,15 @@ export class UI {
   }
 
   // three dials of symbols; check(codeArray) -> bool
+  // wheel 1 is first in reading order (right in Hebrew); notches above each wheel match the bark carvings
   openSymbolLock({ symbols, size, check, onClose }) {
     const pos = Array(size).fill(0);
+    const notchLabel = (n) => ['', T('one notch'), T('two notches'), T('three notches')][n];
     const close = this.openDevice(T('Symbol lock'), T`
-      <p class="dev-note">Three wheels. Six symbols on each wheel.</p>
-      <div class="dials" dir="ltr">${pos.map((_, i) => T`
+      <p class="dev-note">Three wheels. Six symbols on each wheel. The notches above a wheel give its place.</p>
+      <div class="dials">${pos.map((_, i) => T`
         <div class="dial" data-i="${i}">
+          <div class="dial-notch" aria-label="${notchLabel(i + 1)}">${'|'.repeat(i + 1)}</div>
           <button class="dial-btn" data-step="-1" aria-label="Previous symbol">▲</button>
           <div class="dial-face" id="dial-${i}"></div>
           <button class="dial-btn" data-step="1" aria-label="Next symbol">▼</button>
