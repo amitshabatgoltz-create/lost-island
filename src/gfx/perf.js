@@ -48,9 +48,9 @@ export class AutoQuality {
   // dt: real time since the last frame; measuring: the game is on screen and moving (not paused or loading)
   sample(dt, measuring) {
     this.clock += dt;
-    if (!measuring || dt > 0.25) { this.warm = Math.max(this.warm, measuring ? 0.3 : WARMUP); return; } // a hitch or a hidden tab
+    if (!measuring || dt > 2) { this.warm = WARMUP; return; } // paused, loading or back from a hidden tab
     if (this.warm > 0) { this.warm -= dt; this.sum = 0; this.frames = 0; return; }
-    this.sum += dt;
+    this.sum += Math.min(dt, 0.25); // one long hitch (a shader compile) barely moves the average
     this.frames++;
     if (this.sum < WINDOW) return;
     const avg = this.sum / this.frames;
@@ -62,10 +62,19 @@ export class AutoQuality {
     if (this.tier < TIERS.length - 1 && (avg > 1 / 28 || this.slow >= 2)) {
       this.fails[this.tier]++;
       this.blockedUntil[this.tier] = this.clock + 60 * 2 ** Math.min(4, this.fails[this.tier] - 1);
-      this.set(this.tier + 1);
+      this.set(this.step(this.tier, 1));
     } else if (this.tier > 0 && this.fast >= 8 && this.clock > this.blockedUntil[this.tier - 1]) {
-      this.set(this.tier - 1);
+      this.set(this.step(this.tier, -1));
     }
+  }
+
+  // the next tier that really changes something (on a plain 1x screen the top three tiers look the same)
+  step(from, dir) {
+    const dpr = window.devicePixelRatio || 1;
+    const key = (t) => { const x = TIERS[t]; return [Math.min(dpr, x.pr), x.samples, x.shadow, x.post, x.detail].join(); };
+    let t = from + dir;
+    while (t + dir >= 0 && t + dir < TIERS.length && key(t) === key(from)) t += dir;
+    return t;
   }
 
   set(tier) {
