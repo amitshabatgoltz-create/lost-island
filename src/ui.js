@@ -40,6 +40,18 @@ export const ICONS = {
   lock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>',
 };
 
+const LOADING_TIPS = [
+  T('Tip: press F to turn the flashlight on and off'),
+  T('Tip: press E to pick things up and use them'),
+  T('Tip: stuck? Press H for a hint'),
+  T('Tip: press J to open the journal with every clue you found'),
+  T('Tip: press M for the big map of the island'),
+  T('Tip: press Q to see through the survivor\'s eyes'),
+  T('Tip: the chest at the beach camp holds what does not fit in your bag'),
+  T('Tip: the game saves by itself, you can always continue later'),
+  T('Nobody knows what really happened to flight NV 2207…'),
+];
+
 export class UI {
   constructor() {
     this.lastToast = {};
@@ -50,8 +62,23 @@ export class UI {
 
   // ------------------------------------------------------------ screens
   setLoading(p, text) {
-    $('loading-fill').style.width = `${Math.round(p * 100)}%`;
+    const pct = Math.round(Math.min(1, Math.max(0, p)) * 100);
+    $('loading-fill').style.width = `${pct}%`;
+    $('loading-pct').textContent = `${pct}%`;
     if (text) $('loading-text').textContent = text;
+    if (!this.tipTimer) this.nextTip();
+  }
+
+  // a new survival tip under the bar every few seconds while the loading screen shows
+  nextTip() {
+    const el = $('loading-tip');
+    if ($('loading').classList.contains('hidden')) { this.tipTimer = null; return; }
+    this.tipIndex = ((this.tipIndex ?? Math.floor(Math.random() * LOADING_TIPS.length)) + 1) % LOADING_TIPS.length;
+    el.textContent = LOADING_TIPS[this.tipIndex];
+    el.classList.add('swap');
+    void el.offsetWidth; // restart the fade-in
+    el.classList.remove('swap');
+    this.tipTimer = setTimeout(() => this.nextTip(), 4500);
   }
   show(id, v = true) { $(id).classList.toggle('hidden', !v); }
 
