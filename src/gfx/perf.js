@@ -97,6 +97,8 @@ export class FogCuller {
   }
 
   setZone(group) {
+    // zones are kept when left: give back what was hidden, or it would stay hidden on the next visit
+    for (const it of this.items) if (it.off) it.mesh.layers.mask = it.mask;
     this.items = [];
     if (!group) return;
     group.updateMatrixWorld(true);

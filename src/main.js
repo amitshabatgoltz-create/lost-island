@@ -7,7 +7,6 @@ import { IntroScene } from './intro.js';
 import { AudioSystem } from './audio.js';
 import { UI } from './ui.js';
 import { Sequencer } from './core/sequencer.js';
-import { disposeTree } from './core/dispose.js';
 import { ITEMS } from './data/items.js';
 import { QUESTS, questById, PART_START } from './data/quests.js';
 import { FINAL_ENTRY, CLUES } from './data/clues.js';
@@ -36,7 +35,8 @@ import '@fontsource/caveat/500.css';
 import '@fontsource/caveat/700.css';
 import { T, LANG, setLang, locale, applyToPage } from './i18n/index.js';
 
-// zones are separate chunks, loaded on demand and disposed when left
+// zones are separate chunks; all of them are built once while the game loads (before the lobby and the plane)
+// and kept, out of the scene while the player is elsewhere, so entering an area never stops to load
 const ZONES = {
   beach: () => import('./zones/beach/index.js'),
   forest: () => import('./zones/forest/index.js'),
@@ -96,7 +96,6 @@ const game = {
   flicker: 0,
   lookTween: null,
   cineCam: null,
-  lastDispose: null,
 };
 let env, player, intro, lobby;
 
@@ -230,8 +229,10 @@ async function boot() {
     intro = new IntroScene(audio, ui);
     lobby = new Lobby({ player, camera, settings, ui, hooks: { click: () => audio.click() } });
     applySettings();
-    // the lobby is on the beach; continuing in the forest loads it after PLAY
-    await loadZone('beach', (p, t) => ui.setLoading(0.1 + p * 0.82, t), loadState());
+    // the lobby is on the beach; every other area is built and drawn once now, behind the loading screen
+    const saved = loadState();
+    await loadZone('beach', (p, t) => ui.setLoading(0.1 + p * 0.3, t), saved);
+    await preloadZones(saved || freshState());
   } catch (err) {
     console.error(err);
     ui.setLoading(1, T('Error loading the world. Try refreshing the page.'));
@@ -247,17 +248,57 @@ async function boot() {
 }
 
 // ------------------------------------------------------------------ zones
+const zoneCache = {}; // id -> promise of the built zone
+const zoneReady = (id) => !!zoneCache[id] && zoneCache[id].done;
+
+function buildZone(id, onProgress) {
+  if (!zoneCache[id]) {
+    const p = ZONES[id]().then((mod) => mod.build(env, api, onProgress));
+    p.then(() => { p.done = true; }, () => { delete zoneCache[id]; });
+    zoneCache[id] = p;
+  }
+  return zoneCache[id];
+}
+
+// builds every area, then shows each one for a single hidden frame with nothing culled, so its shaders
+// (shadow ones too), meshes, textures and minimap are all ready before the game starts
+async function preloadZones(state) {
+  const order = ['forest', 'ridge', 'facility'];
+  for (let i = 0; i < order.length; i++) {
+    const id = order[i];
+    await loadZone(id, (p, t) => ui.setLoading(0.4 + (i + p) * 0.15, t), state);
+    ui.setLoading(0.4 + (i + 1) * 0.15, T('Preparing shaders'));
+    await new Promise((r) => setTimeout(r, 0));
+    warmZone(game.zone);
+  }
+  await loadZone('beach', () => {}, loadState());
+  warmZone(game.zone);
+}
+
+function warmZone(zone) {
+  // hidden things (an item not placed yet, a far chunk) are drawn too, then everything is put back
+  const culled = [], hidden = [];
+  zone.group.traverse((o) => {
+    if (o.frustumCulled) { o.frustumCulled = false; culled.push(o); }
+    if (!o.visible) { o.visible = true; hidden.push(o); }
+  });
+  renderer.shadowMap.needsUpdate = true;
+  player.flashlight.shadow.needsUpdate = true; // its shadow is only drawn while it is on
+  post.render(env.scene, camera);
+  for (const o of culled) o.frustumCulled = true;
+  for (const o of hidden) o.visible = false;
+}
+
 async function loadZone(id, onProgress = () => {}, stateForEnv = null) {
+  if (game.zone && game.zone.id === id) return game.zone;
+  const zone = await buildZone(id, onProgress);
   if (game.zone && game.zone.id === id) return game.zone;
   if (game.zone) {
     fogCull.setZone(null);
-    if (game.zone.dispose) game.zone.dispose();
-    game.lastDispose = disposeTree(game.zone.group);
+    game.zone.group.removeFromParent();
     game.zone = null;
   }
   game.focused = null;
-  const mod = await ZONES[id]();
-  const zone = await mod.build(env, api, onProgress);
   env.scene.add(zone.group);
   game.zone = zone;
   player.setZone(zone);
@@ -295,7 +336,7 @@ async function enterZone(to, spawnName) {
   if (to === 'forest') game.state.flags.nightfall = true;
   const from = game.zone.id;
   game.state.zone = to;
-  ui.show('loading', true);
+  ui.show('loading', !zoneReady(to)); // everything is normally built at the start
   ui.setLoading(0, to === 'forest' && from !== 'beach' ? T('Back to the forest…') : LOADING_TEXT[to]);
   await loadZone(to, (p, t) => ui.setLoading(p, t));
   ui.show('loading', false);
@@ -567,7 +608,7 @@ async function showTitle() {
   if (document.pointerLockElement) { game.suppressPause = true; document.exitPointerLock(); }
   if (game.zone.id !== 'beach') {
     ui.fade(1, 0);
-    ui.show('loading', true);
+    ui.show('loading', !zoneReady('beach'));
     ui.setLoading(0, T('Back to the beach…'));
     await loadZone('beach', (p, t) => ui.setLoading(p, t), loadState() || game.state);
     ui.show('loading', false);
@@ -647,7 +688,7 @@ async function continueGame() {
   audio.setVolume(settings.volume);
   ui.fade(1, 0);
   if (game.zone.id !== saved.zone) {
-    ui.show('loading', true);
+    ui.show('loading', !zoneReady(saved.zone));
     await loadZone(saved.zone, (p, t) => ui.setLoading(p, t));
     ui.show('loading', false);
   }
@@ -938,7 +979,10 @@ function applyShadowSetting() {
   renderer.shadowMap.enabled = settings.shadows;
   env.setShadows(settings.shadows);
   if (player) player.setFlashlightShadows(settings.shadows);
-  env.scene.traverse((o) => { if (o.material) [].concat(o.material).forEach((m) => (m.needsUpdate = true)); });
+  const refresh = (o) => { if (o.material) [].concat(o.material).forEach((m) => (m.needsUpdate = true)); };
+  env.scene.traverse(refresh);
+  // areas the player is not in are kept out of the scene
+  for (const p of Object.values(zoneCache)) p.then((z) => { if (z !== game.zone) z.group.traverse(refresh); }, () => {});
 }
 
 function applySettings() {
