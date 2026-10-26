@@ -159,9 +159,8 @@ export function createEnvironment(renderer) {
       sun.visible = preset.lightI > 0; // no sun shadow pass inside the mountain
     },
     setShadows(on) { sun.castShadow = on; },
-    // shadow map resolution per quality setting (the 80 m shadow area is kept tight around the view)
-    setShadowQuality(high) {
-      const n = high ? 2048 : 1024;
+    // shadow map resolution per quality level (the 80 m shadow area is kept tight around the view)
+    setShadowQuality(n) {
       if (sun.shadow.mapSize.x === n) return;
       sun.shadow.mapSize.set(n, n);
       if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }

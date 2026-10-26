@@ -45,6 +45,13 @@ export class Minimap {
   // `yaw` is the camera yaw (the map turns so the camera looks up), `facing` the body direction
   update(pos, camYaw, facing, state) {
     if (!this.base) return;
+    // redrawn at most 30 times a second, and only when the view moved (the corner map needs no more)
+    const now = performance.now();
+    if (now - (this.lastDraw || 0) < 33) return;
+    const sig = `${pos.x.toFixed(2)},${pos.z.toFixed(2)},${camYaw.toFixed(3)},${facing.toFixed(2)},${state.collected.length},${state.questIndex}`;
+    if (sig === this.lastSig && now - this.lastDraw < 500) return;
+    this.lastDraw = now;
+    this.lastSig = sig;
     const css = this.el.clientWidth;
     if (!css) return; // HUD hidden
     const dpr = Math.min(2, window.devicePixelRatio || 1);
