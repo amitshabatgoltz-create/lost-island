@@ -19,6 +19,7 @@ import { RECIPES } from './data/recipes.js';
 import { createPost } from './gfx/post.js';
 import { GFX } from './gfx/materials.js';
 import { setAnisotropy } from './gfx/textures.js';
+import { TIERS, AutoQuality, FogCuller, guessTier } from './gfx/perf.js';
 import { Lobby } from './lobby.js';
 import { DEFAULT_SKIN } from './data/skins.js';
 import { Minimap, BigMap } from './systems/minimap.js';
@@ -50,7 +51,6 @@ const $ = (id) => document.getElementById(id);
 // ------------------------------------------------------------------ renderer
 const canvas = $('game');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-renderer.setPixelRatio(params.has('lowfx') ? 0.5 : Math.min(window.devicePixelRatio, 1.5));
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -64,6 +64,13 @@ const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 40
 const ui = new UI();
 const audio = new AudioSystem();
 const settings = loadSettings();
+// automatic quality: resolution, effects and shadow detail follow the measured frame rate (see gfx/perf.js)
+const autoQ = new AutoQuality(settings.perfTier ?? guessTier(renderer), (tier) => {
+  settings.perfTier = tier;
+  saveSettings(settings);
+  applyQuality();
+});
+const fogCull = new FogCuller();
 audio.volume = settings.volume;
 const seq = new Sequencer();
 const minimap = new Minimap($('hud'));
@@ -92,8 +99,7 @@ const game = {
 let env, player, intro, lobby;
 
 window.addEventListener('resize', () => {
-  renderer.setSize(innerWidth, innerHeight);
-  post.setSize(innerWidth, innerHeight);
+  applyPixelRatio();
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
   intro && intro.resize();
@@ -242,6 +248,7 @@ async function boot() {
 async function loadZone(id, onProgress = () => {}, stateForEnv = null) {
   if (game.zone && game.zone.id === id) return game.zone;
   if (game.zone) {
+    fogCull.setZone(null);
     if (game.zone.dispose) game.zone.dispose();
     game.lastDispose = disposeTree(game.zone.group);
     game.zone = null;
@@ -253,6 +260,7 @@ async function loadZone(id, onProgress = () => {}, stateForEnv = null) {
   game.zone = zone;
   player.setZone(zone);
   minimap.setZone(zone);
+  fogCull.setZone(zone.group);
   camera.far = zone.cameraFar;
   camera.updateProjectionMatrix();
   applyZoneEnv(stateForEnv || game.state);
@@ -898,15 +906,33 @@ function resume() {
   requestPointer();
 }
 
-// graphics quality: high = post-processing, detailed terrain blending, 2048 shadows; low = plain render, 1024 shadows
+// graphics quality: the automatic tier (or the best one when "auto" is off) within the player's own settings.
+// "Advanced graphics" off = no post-processing, simple terrain blending, 1024 shadows.
+function qualityTier() {
+  if (params.has('lowfx')) return TIERS[TIERS.length - 1];
+  return TIERS[settings.autoQuality !== false ? autoQ.tier : 0];
+}
+function applyPixelRatio() {
+  const t = qualityTier();
+  renderer.setPixelRatio(params.has('lowfx') ? 0.5 : Math.min(window.devicePixelRatio || 1, t.pr));
+  renderer.setSize(innerWidth, innerHeight);
+  post.setSize(innerWidth, innerHeight);
+}
 function applyQuality() {
+  const t = qualityTier();
   const high = settings.hq !== false && !params.has('lowfx');
-  post.enabled = high;
-  GFX.detail.value = high ? 1 : 0;
-  env.setShadowQuality(high);
+  post.enabled = high && t.post;
+  post.setSamples(t.samples);
+  GFX.detail.value = high && t.detail ? 1 : 0;
+  env.setShadowQuality(high ? t.shadow : 1024);
+  applyPixelRatio();
 }
 
+let shadowsOn = null;
 function applyShadowSetting() {
+  // switching shadows rebuilds every shader: only when the setting really changed
+  if (shadowsOn === settings.shadows) return;
+  shadowsOn = settings.shadows;
   renderer.shadowMap.enabled = settings.shadows;
   env.setShadows(settings.shadows);
   if (player) player.setFlashlightShadows(settings.shadows);
@@ -919,6 +945,7 @@ function applySettings() {
   $('set-invert').checked = settings.invertY;
   $('set-shadows').checked = settings.shadows;
   $('set-quality').checked = settings.hq !== false;
+  $('set-auto').checked = settings.autoQuality !== false;
   player.settings.sens = settings.sens;
   player.settings.invertY = settings.invertY;
   audio.setVolume(settings.volume);
@@ -930,7 +957,7 @@ function bindSetting(id, key, prop = 'value', parse = Number) {
     settings[key] = prop === 'checked' ? e.target.checked : parse(e.target.value);
     saveSettings(settings);
     if (key === 'shadows') applyShadowSetting();
-    if (key === 'hq') { applyQuality(); applyShadowSetting(); }
+    if (key === 'hq' || key === 'autoQuality') applyQuality();
     player.settings.sens = settings.sens;
     player.settings.invertY = settings.invertY;
     audio.setVolume(settings.volume);
@@ -941,6 +968,7 @@ bindSetting('set-vol', 'volume');
 bindSetting('set-invert', 'invertY', 'checked');
 bindSetting('set-quality', 'hq', 'checked');
 bindSetting('set-shadows', 'shadows', 'checked');
+bindSetting('set-auto', 'autoQuality', 'checked');
 
 $('btn-resume').addEventListener('click', resume);
 $('btn-main').addEventListener('click', () => { persist(); ui.show('pause', false); showTitle(); });
@@ -1166,11 +1194,20 @@ function step(dt) {
   minimap.update(player.pos, player.camYaw, player.facing, game.state);
 }
 
+// modes in which the frame rate is measured for the automatic quality (the world is on screen and moving)
+const MEASURE_MODES = ['play', 'cine', 'scope', 'title', 'wake', 'intro'];
 function loop() {
   requestAnimationFrame(loop);
-  step(Math.min(clock.getDelta(), 0.05));
+  const raw = clock.getDelta();
+  if (fpsEl) { renderer.info.autoReset = false; renderer.info.reset(); }
+  step(Math.min(raw, 0.05));
+  if (game.zone && game.mode !== 'intro') fogCull.update(raw, camera, env.scene.fog);
   renderFrame();
+  if (settings.autoQuality !== false && !params.has('lowfx')) autoQ.sample(raw, MEASURE_MODES.includes(game.mode) && !document.hidden);
+  if (fpsEl) fpsEl.textContent = `${Math.round(autoQ.fps)} fps · level ${autoQ.tier + 1}/${TIERS.length} · ${renderer.info.render.calls} draws`;
 }
+// ?fps shows the measured frame rate and the automatic quality level
+const fpsEl = params.has('fps') ? Object.assign(document.body.appendChild(document.createElement('div')), { style: 'position:fixed;left:8px;bottom:8px;z-index:99;font:12px monospace;color:#fff;background:#0008;padding:3px 6px;pointer-events:none' }) : null;
 function renderFrame() {
   if (game.mode === 'intro') post.render(intro.scene, intro.camera);
   else if (game.zone && game.mode !== 'transition') post.render(env.scene, camera);
@@ -1240,6 +1277,9 @@ if (DEBUG) {
     renderFrame,
     post,
     GFXdetail: GFX.detail,
+    autoQ,
+    fogCull,
+    applyQuality,
   };
 }
 

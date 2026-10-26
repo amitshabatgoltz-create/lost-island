@@ -850,7 +850,7 @@ function buildVegetation(scene, colliders, shared, rnd) {
       return { m, c, key: `${Math.floor(x / CHUNK)},${Math.floor(z / CHUNK)}` };
     });
   }
-  function addInstanced(geo, mat, placed, shadow) {
+  function addInstanced(geo, mat, placed, shadow, cullDist = 0) {
     const groups = new Map();
     for (const p of placed) { if (!groups.has(p.key)) groups.set(p.key, []); groups.get(p.key).push(p); }
     for (const list of groups.values()) {
@@ -859,6 +859,7 @@ function buildVegetation(scene, colliders, shared, rnd) {
       im.computeBoundingSphere();
       im.castShadow = shadow;
       im.receiveShadow = true;
+      im.userData.cullDist = cullDist; // small plants are not drawn far away (gfx/perf.js)
       scene.add(im);
     }
   }
@@ -875,8 +876,8 @@ function buildVegetation(scene, colliders, shared, rnd) {
     addInstanced(tg.leaves, canopyMat, set, true);
   });
   addInstanced(bushGeometry(5), canopyMat, place(bushes, { scale: [0.7, 1.5], sink: 0.1 }), true);
-  addInstanced(fernGeometry(), smallMat, place(ferns, { scale: [0.7, 1.4] }), false);
-  addInstanced(grassGeometry(), smallMat, place(grass, { scale: [0.8, 1.5] }), false);
+  addInstanced(fernGeometry(), smallMat, place(ferns, { scale: [0.7, 1.4] }), false, 70);
+  addInstanced(grassGeometry(), smallMat, place(grass, { scale: [0.8, 1.5] }), false, 55);
 
   // beach plants (low, spiky) on the sand
   const beachPlants = [];

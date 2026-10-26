@@ -54,6 +54,14 @@ export function createPost(renderer) {
       renderPass.camera = camera;
       composer.render();
     },
+    // MSAA of the HDR target (fewer samples on the cheaper automatic quality tiers)
+    setSamples(n) {
+      for (const t of [composer.renderTarget1, composer.renderTarget2]) {
+        if (t.samples === n) continue;
+        t.samples = n;
+        t.dispose();
+      }
+    },
     setSize(w, h) {
       composer.setPixelRatio(renderer.getPixelRatio());
       composer.setSize(w, h);
