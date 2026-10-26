@@ -170,6 +170,7 @@ export async function build(env, api, onProgress = () => {}) {
       supply.setOpen(!!f.crateOpen || s.collected.includes('powerCell'));
       transmitter.setRed(s.flags.endingSeen ? 'off' : 'blink');
       if (s.flags.endingSeen) { farOn = farLights.length; newSignalOn = true; }
+      else if (s.questIndex < 14) { farOn = 0; newSignalOn = false; } // a new game in the same session
       zone.syncInteractables && zone.syncInteractables(s);
     },
     update(dt, t, focus, camera) {

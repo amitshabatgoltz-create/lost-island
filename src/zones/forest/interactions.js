@@ -358,10 +358,10 @@ export function createForestInteractions(zone, api) {
 
   // ------------------------------------------------------------------ ending
   function startEnding() {
-    const T = FL.transmitter;
-    const base = terrainHeight(T.x, T.z);
-    const camPos = new THREE.Vector3(T.x + Math.sin(T.rot) * 4.2 + 1.2, base + 1.8, T.z + Math.cos(T.rot) * 4.2 + 1.6);
-    const lookCab = new THREE.Vector3(T.x, base + 1.2, T.z);
+    const TX = FL.transmitter;
+    const base = terrainHeight(TX.x, TX.z);
+    const camPos = new THREE.Vector3(TX.x + Math.sin(TX.rot) * 4.2 + 1.2, base + 1.8, TX.z + Math.cos(TX.rot) * 4.2 + 1.6);
+    const lookCab = new THREE.Vector3(TX.x, base + 1.2, TX.z);
     const lookMast = P.transmitter.top.clone();
     const lights = FL.farLights.map(([x, z]) => new THREE.Vector3(x, terrainHeight(x, z) + 7, z));
     const lookFar = lights.reduce((a, b) => a.add(b), new THREE.Vector3()).multiplyScalar(1 / lights.length);
@@ -421,11 +421,11 @@ export function createForestInteractions(zone, api) {
   };
 
   let noiseT = 18, campRadioRun = false;
-  const T = FL.transmitter;
+  const TX = FL.transmitter;
   zone.tick = (dt, t, player) => {
     const s = api.state, f = s.flags;
     const px = player.pos.x, pz = player.pos.z;
-    const dT = Math.hypot(px - T.x, pz - T.z);
+    const dT = Math.hypot(px - TX.x, pz - TX.z);
     if (!f.reachedTransmitter && dT < 13) {
       api.setFlag('reachedTransmitter');
       api.thought(T('The transmitter. Someone built it here, in the middle of the forest, and it is dead.'), 4);
