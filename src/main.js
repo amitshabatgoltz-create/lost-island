@@ -232,7 +232,8 @@ async function boot() {
     // the lobby is on the beach; every other area is built and drawn once now, behind the loading screen
     const saved = loadState();
     await loadZone('beach', (p, t) => ui.setLoading(0.1 + p * 0.3, t), saved);
-    await preloadZones(saved || freshState());
+    await preloadZones(saved || freshState()).catch((err) => console.error(err));
+    if (game.zone.id !== 'beach') await loadZone('beach', () => {}, saved);
   } catch (err) {
     console.error(err);
     ui.setLoading(1, T('Error loading the world. Try refreshing the page.'));
@@ -260,33 +261,42 @@ function buildZone(id, onProgress) {
   return zoneCache[id];
 }
 
-// builds every area, then shows each one for a single hidden frame with nothing culled, so its shaders
-// (shadow ones too), meshes, textures and minimap are all ready before the game starts
+// builds every area and gets its shaders and textures onto the GPU behind the loading screen. Nothing here may
+// hold the game: an area that fails or takes too long is simply built (again) when the player walks in.
 async function preloadZones(state) {
   const order = ['forest', 'ridge', 'facility'];
   for (let i = 0; i < order.length; i++) {
     const id = order[i];
-    await loadZone(id, (p, t) => ui.setLoading(0.4 + (i + p) * 0.15, t), state);
-    ui.setLoading(0.4 + (i + 1) * 0.15, T('Preparing shaders'));
-    await new Promise((r) => setTimeout(r, 0));
-    warmZone(game.zone);
+    try {
+      await loadZone(id, (p, t) => ui.setLoading(0.4 + (i + p) * 0.15, t), state);
+      ui.setLoading(0.4 + (i + 0.9) * 0.15, T('Preparing shaders'));
+      await warmZone(game.zone);
+    } catch (err) {
+      console.error(err);
+    }
   }
   await loadZone('beach', () => {}, loadState());
-  warmZone(game.zone);
+  await warmZone(game.zone);
 }
 
-function warmZone(zone) {
-  // hidden things (an item not placed yet, a far chunk) are drawn too, then everything is put back
-  const culled = [], hidden = [];
+// compiles every shader the zone needs, hidden things included (an item not placed yet, a far chunk), and uploads
+// its textures. No frame is drawn: drawing a whole zone at once could choke a weak graphics card.
+async function warmZone(zone) {
+  const hidden = [];
+  zone.group.traverse((o) => { if (!o.visible) { o.visible = true; hidden.push(o); } });
+  let done;
+  try {
+    done = renderer.compileAsync(env.scene, camera); // the compile itself happens right away, inside this call
+  } finally {
+    for (const o of hidden) o.visible = false;
+  }
+  const textures = new Set();
   zone.group.traverse((o) => {
-    if (o.frustumCulled) { o.frustumCulled = false; culled.push(o); }
-    if (!o.visible) { o.visible = true; hidden.push(o); }
+    for (const m of [].concat(o.material || [])) for (const v of Object.values(m)) if (v && v.isTexture && v.image && !v.isRenderTargetTexture) textures.add(v);
   });
-  renderer.shadowMap.needsUpdate = true;
-  player.flashlight.shadow.needsUpdate = true; // its shadow is only drawn while it is on
-  post.render(env.scene, camera);
-  for (const o of culled) o.frustumCulled = true;
-  for (const o of hidden) o.visible = false;
+  for (const t of textures) renderer.initTexture(t);
+  // the browser finishes compiling in the background; never wait on it for more than a few seconds
+  await Promise.race([done.catch(() => {}), new Promise((r) => setTimeout(r, 4000))]);
 }
 
 async function loadZone(id, onProgress = () => {}, stateForEnv = null) {
