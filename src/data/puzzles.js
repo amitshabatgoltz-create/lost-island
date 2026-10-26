@@ -1,15 +1,16 @@
 // All Part 2 puzzle definitions. Solutions live only here.
+import { T } from '../i18n/index.js';
 
 const svg = (d) => `<svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg>`;
 const sym = (id, name, path) => ({ id, name, path, svg: svg(path) });
 // paths are drawn both as SVG (UI) and with canvas Path2D (bark carvings), on a 40×40 grid
 export const SYMBOLS = [
-  sym('circle', 'Circle', 'M8 20 a12 12 0 1 0 24 0 a12 12 0 1 0 -24 0'),
-  sym('triangle', 'Triangle', 'M20 7 L33 31 H7 Z'),
-  sym('wave', 'Wave', 'M5 20 q5 -9 10 0 t10 0 t10 0'),
-  sym('eye', 'Eye', 'M5 20 Q20 6 35 20 Q20 34 5 20 Z M16 20 a4 4 0 1 0 8 0 a4 4 0 1 0 -8 0'),
-  sym('spiral', 'Spiral', 'M20 20 m0 -2 a2 2 0 1 1 -2 2 a5 5 0 1 1 5 5 a8 8 0 1 1 -8 -8 a11 11 0 1 1 11 11'),
-  sym('cross', 'Cross', 'M20 7 V33 M7 20 H33'),
+  sym('circle', T('Circle'), 'M8 20 a12 12 0 1 0 24 0 a12 12 0 1 0 -24 0'),
+  sym('triangle', T('Triangle'), 'M20 7 L33 31 H7 Z'),
+  sym('wave', T('Wave'), 'M5 20 q5 -9 10 0 t10 0 t10 0'),
+  sym('eye', T('Eye'), 'M5 20 Q20 6 35 20 Q20 34 5 20 Z M16 20 a4 4 0 1 0 8 0 a4 4 0 1 0 -8 0'),
+  sym('spiral', T('Spiral'), 'M20 20 m0 -2 a2 2 0 1 1 -2 2 a5 5 0 1 1 5 5 a8 8 0 1 1 -8 -8 a11 11 0 1 1 11 11'),
+  sym('cross', T('Cross'), 'M20 7 V33 M7 20 H33'),
 ];
 export const symbolName = (id) => (SYMBOLS.find((s) => s.id === id) || {}).name;
 
@@ -25,15 +26,15 @@ export const CRATE_CODE = ['wave', 'triangle', 'spiral'];
 // Wiring logic puzzle: four wires, four terminals (1 = top). The service card states three rules
 // that leave exactly one arrangement: green 1, blue 2, yellow 3, red 4.
 export const WIRES = [
-  { id: 'red', name: 'Red', color: '#d0453a' },
-  { id: 'yellow', name: 'Yellow', color: '#e3b82d' },
-  { id: 'green', name: 'Green', color: '#3fa55b' },
-  { id: 'blue', name: 'Blue', color: '#3f7fd0' },
+  { id: 'red', name: T('Red'), color: '#d0453a' },
+  { id: 'yellow', name: T('Yellow'), color: '#e3b82d' },
+  { id: 'green', name: T('Green'), color: '#3fa55b' },
+  { id: 'blue', name: T('Blue'), color: '#3f7fd0' },
 ];
 export const WIRING_RULES = [
-  'Green goes on the top terminal.',
-  'Blue sits right next to green.',
-  'Yellow is never at the bottom.',
+  T('Green goes on the top terminal.'),
+  T('Blue sits right next to green.'),
+  T('Yellow is never at the bottom.'),
 ];
 export const WIRING_SOLUTION = { green: 1, blue: 2, yellow: 3, red: 4 };
 
@@ -47,15 +48,15 @@ export const LOCKER_CODE = '1423';
 // Junction box outside the bunker door: the label inside the cover leaves one arrangement:
 // green 1, orange 2, black 3, white 4.
 export const JUNCTION_WIRES = [
-  { id: 'black', name: 'Black', color: '#2b2b2b' },
-  { id: 'white', name: 'White', color: '#e8e4da' },
-  { id: 'orange', name: 'Orange', color: '#e07a2a' },
-  { id: 'green', name: 'Green', color: '#3fa55b' },
+  { id: 'black', name: T('Black'), color: '#2b2b2b' },
+  { id: 'white', name: T('White'), color: '#e8e4da' },
+  { id: 'orange', name: T('Orange'), color: '#e07a2a' },
+  { id: 'green', name: T('Green'), color: '#3fa55b' },
 ];
 export const JUNCTION_RULES = [
-  'Green (earth) goes on the top terminal.',
-  'White never sits next to green.',
-  'Orange (feed) sits directly above black.',
+  T('Green (earth) goes on the top terminal.'),
+  T('White never sits next to green.'),
+  T('Orange (feed) sits directly above black.'),
 ];
 export const JUNCTION_SOLUTION = { green: 1, orange: 2, black: 3, white: 4 };
 

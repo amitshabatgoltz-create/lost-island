@@ -1,12 +1,13 @@
 // Minimap description of the northern ridge: the trail, its clearings and cliff rock from the zone's own data.
 import { RL, RPATH, RCLEARINGS } from './layout.js';
+import { T } from '../../i18n/index.js';
 
 const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
 const FLOOR = [52, 76, 46], CLEAR = [98, 100, 70], ROCK = [116, 112, 104];
 
 export const MINIMAP = {
-  title: 'NORTHERN RIDGE',
+  title: T('NORTHERN RIDGE'),
   margin: 18,
   ground(x, z, h, slope) {
     let c = FLOOR;

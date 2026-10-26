@@ -34,6 +34,7 @@ import '@fontsource/amatic-sc/400.css';
 import '@fontsource/amatic-sc/700.css';
 import '@fontsource/caveat/500.css';
 import '@fontsource/caveat/700.css';
+import { T, LANG, setLang, locale, applyToPage } from './i18n/index.js';
 
 // zones are separate chunks, loaded on demand and disposed when left
 const ZONES = {
@@ -42,11 +43,12 @@ const ZONES = {
   ridge: () => import('./zones/ridge/index.js'),
   facility: () => import('./zones/facility/index.js'),
 };
-const LOADING_TEXT = { beach: 'Back to the beach…', forest: 'Entering the forest…', ridge: 'Climbing north…', facility: 'Into the mountain…' };
+const LOADING_TEXT = { beach: T('Back to the beach…'), forest: T('Entering the forest…'), ridge: T('Climbing north…'), facility: T('Into the mountain…') };
 
 const params = new URLSearchParams(location.search);
 const DEBUG = params.has('debug');
 const $ = (id) => document.getElementById(id);
+applyToPage();
 
 // ------------------------------------------------------------------ renderer
 const canvas = $('game');
@@ -110,15 +112,15 @@ const has = (id) => game.state.collected.includes(id);
 
 // first-time guidance for a mechanic; remembered across sessions so it never repeats
 const TIPS = {
-  move: 'WASD to move · click the screen and move the mouse to look · Shift to run.',
-  interact: 'When a prompt shows at the bottom of the screen, press E to check or pick up an object.',
-  flashlight: 'F turns the flashlight on and off.',
-  journal: 'J opens the booklet: what I know, the clues I found and the map.',
-  clue: 'Every clue goes into the booklet (J → Clues). Your mission updates as you discover more.',
-  locked: 'This has a combination lock. Look around for details that explain it. Everything you found is in the booklet (J).',
-  hint: 'Stuck? H gives a hint. Each press is clearer, and the last one explains the answer.',
-  forest: 'There is no arrow in the forest. Find your way by the red light, the trails and landmarks, and the forest map in the booklet (J → Map).',
-  storage: 'In the chest: click moves a whole stack, Shift+click moves one item.',
+  move: T('WASD to move · click the screen and move the mouse to look · Shift to run.'),
+  interact: T('When a prompt shows at the bottom of the screen, press E to check or pick up an object.'),
+  flashlight: T('F turns the flashlight on and off.'),
+  journal: T('J opens the booklet: what I know, the clues I found and the map.'),
+  clue: T('Every clue goes into the booklet (J → Clues). Your mission updates as you discover more.'),
+  locked: T('This has a combination lock. Look around for details that explain it. Everything you found is in the booklet (J).'),
+  hint: T('Stuck? H gives a hint. Each press is clearer, and the last one explains the answer.'),
+  forest: T('There is no arrow in the forest. Find your way by the red light, the trails and landmarks, and the forest map in the booklet (J → Map).'),
+  storage: T('In the chest: click moves a whole stack, Shift+click moves one item.'),
 };
 function tip(id) {
   settings.tutorials = settings.tutorials || {};
@@ -168,7 +170,7 @@ const api = {
     audio.page();
     ui.journalTab = 'clues';
     openJournal();
-    ui.thought('My board. Everything I found, connected with red string.', 3);
+    ui.thought(T('My board. Everything I found, connected with red string.'), 3);
   },
   checkQuests: () => checkQuests(),
   setFlashlight: (on) => setFlashlight(on),
@@ -216,8 +218,8 @@ async function boot() {
     env = createEnvironment(renderer);
     player = new Player(env.scene, camera);
     player.onBoundary = onBoundary;
-    ui.setLoading(0.02, 'Character');
-    const onSkin = (p) => ui.setLoading(0.02 + p * 0.08, 'Character');
+    ui.setLoading(0.02, T('Character'));
+    const onSkin = (p) => ui.setLoading(0.02 + p * 0.08, T('Character'));
     try {
       await player.load(onSkin, settings.skin || DEFAULT_SKIN);
     } catch (err) {
@@ -232,13 +234,13 @@ async function boot() {
     await loadZone('beach', (p, t) => ui.setLoading(0.1 + p * 0.82, t), loadState());
   } catch (err) {
     console.error(err);
-    ui.setLoading(1, 'Error loading the world. Try refreshing the page.');
+    ui.setLoading(1, T('Error loading the world. Try refreshing the page.'));
     return;
   }
-  ui.setLoading(0.96, 'Preparing shaders');
+  ui.setLoading(0.96, T('Preparing shaders'));
   await new Promise((r) => setTimeout(r, 0));
   intro.compile(renderer);
-  ui.setLoading(1, 'Ready');
+  ui.setLoading(1, T('Ready'));
   portal.loadingFinished();
   setTimeout(() => { ui.show('loading', false); showTitle(); }, 250);
   requestAnimationFrame(loop);
@@ -294,7 +296,7 @@ async function enterZone(to, spawnName) {
   const from = game.zone.id;
   game.state.zone = to;
   ui.show('loading', true);
-  ui.setLoading(0, to === 'forest' && from !== 'beach' ? 'Back to the forest…' : LOADING_TEXT[to]);
+  ui.setLoading(0, to === 'forest' && from !== 'beach' ? T('Back to the forest…') : LOADING_TEXT[to]);
   await loadZone(to, (p, t) => ui.setLoading(p, t));
   ui.show('loading', false);
   const sp = game.zone.spawns[spawnName];
@@ -312,15 +314,15 @@ async function enterZone(to, spawnName) {
   if (to === 'forest') setTimeout(() => tip('forest'), 3000);
   if (game.zone.onEnter) game.zone.onEnter(from);
   if (firstForest) {
-    ui.titleCard('A few hours later', 'The forest · night');
-    api.thought('Darkness fell fast. The flashlight is all I have, and one red light above the treetops.', 5, 2.5);
+    ui.titleCard(T('A few hours later'), T('The forest · night'));
+    api.thought(T('Darkness fell fast. The flashlight is all I have, and one red light above the treetops.'), 5, 2.5);
   }
 }
 
 // ------------------------------------------------------------------ items & quests
 function bagFull(need) {
   audio.deny();
-  ui.toast(need ? `My bag is full, no room for ${need}. I can make room in the chest at the beach camp.` : 'My bag is full', 'warn', 4);
+  ui.toast(need ? T`My bag is full, no room for ${need}. I can make room in the chest at the beach camp.` : T('My bag is full'), 'warn', 4);
 }
 
 // returns true if the item was taken
@@ -361,7 +363,7 @@ function collectResource(nodeId, itemId, qty) {
   s.collected.push(nodeId);
   audio.pickup();
   player.playPickup();
-  ui.toast(`Picked up: ${ITEMS[itemId].name} ×${qty}`, 'item', 3);
+  ui.toast(T`Picked up: ${ITEMS[itemId].name} ×${qty}`, 'item', 3);
   refreshHUD(itemId);
   persist();
   return true;
@@ -459,13 +461,13 @@ function updateScope(dt) {
 function showHint() {
   const s = game.state;
   const q = QUESTS[Math.min(s.questIndex, QUESTS.length - 1)];
-  if (!q.hints || !q.hints.length) { ui.toast('No hint right now.', '', 2); return; }
+  if (!q.hints || !q.hints.length) { ui.toast(T('No hint right now.'), '', 2); return; }
   s.hints = s.hints || {};
   const prev = s.hints[q.id] || 0;
   const lvl = Math.min(prev + 1, q.hints.length);
   if (lvl > prev) { s.hints[q.id] = lvl; s.hintsUsed = (s.hintsUsed || 0) + 1; }
   audio.page();
-  ui.toast(`Hint ${lvl} / ${q.hints.length}`, '', 2.2);
+  ui.toast(T`Hint ${lvl} / ${q.hints.length}`, '', 2.2);
   ui.thought(q.hints[lvl - 1], 7);
   persist();
 }
@@ -502,7 +504,7 @@ function onQuestStart(i) {
   game.questTime = 0;
   audio.quest();
   ui.flashQuest();
-  ui.toast(q.final ? `Part ${q.part - 1} complete` : `New mission: ${q.title}`, 'quest', 4);
+  ui.toast(q.final ? T`Part ${q.part - 1} complete` : T`New mission: ${q.title}`, 'quest', 4);
   if (q.start) api.thought(q.start.thought, 4.2, q.start.delay || 0.8);
 }
 
@@ -545,8 +547,8 @@ function persist() {
 // ------------------------------------------------------------------ screens & flow
 function partLabel(s) {
   const q = QUESTS[Math.min(s.questIndex, QUESTS.length - 1)];
-  if (q.final) return `Part ${q.part - 1} complete`;
-  return `Part ${q.part} · Mission ${s.questIndex - PART_START[q.part] + 1}`;
+  if (q.final) return T`Part ${q.part - 1} complete`;
+  return T`Part ${q.part} · Mission ${s.questIndex - PART_START[q.part] + 1}`;
 }
 
 // main lobby on the beach (the forest is left behind if the player was there)
@@ -566,7 +568,7 @@ async function showTitle() {
   if (game.zone.id !== 'beach') {
     ui.fade(1, 0);
     ui.show('loading', true);
-    ui.setLoading(0, 'Back to the beach…');
+    ui.setLoading(0, T('Back to the beach…'));
     await loadZone('beach', (p, t) => ui.setLoading(p, t), loadState() || game.state);
     ui.show('loading', false);
   }
@@ -582,12 +584,12 @@ async function showTitle() {
 function refreshLobbyMenu() {
   const saved = loadState();
   const canContinue = !!(saved && saved.flags.introDone);
-  $('btn-play-label').textContent = canContinue ? 'Continue' : 'Play';
-  $('play-note').textContent = canContinue ? `Pick up where you left off · ${partLabel(saved)}` : 'Start from the beginning: the flight, the crash and the island';
+  $('btn-play-label').textContent = canContinue ? T('Continue') : T('Play');
+  $('play-note').textContent = canContinue ? T`Pick up where you left off · ${partLabel(saved)}` : T('Start from the beginning: the flight, the crash and the island');
   ui.show('btn-new', canContinue);
   $('save-info').textContent = canContinue
-    ? `Last saved: ${new Date(saved.savedAt).toLocaleString('en-US')}`
-    : storageAvailable() ? '' : 'Note: your browser blocks local saving, so progress will not be saved.';
+    ? T`Last saved: ${new Date(saved.savedAt).toLocaleString(locale())}`
+    : storageAvailable() ? '' : T('Note: your browser blocks local saving, so progress will not be saved.');
 }
 
 // waves and birds behind the lobby; browsers only allow sound after the first click or key press
@@ -659,7 +661,7 @@ async function continueGame() {
   audio.startAmbience();
   audio.resumeAmbience();
   enterPlay();
-  ui.toast('Progress loaded', '', 2.5);
+  ui.toast(T('Progress loaded'), '', 2.5);
   checkQuests(); // also resumes a reveal interrupted by a reload
   chapter3Intro();
 }
@@ -698,8 +700,8 @@ function updateWake(dt) {
   once('blink1', 0.6, () => ui.eyes('half'));
   once('blink2', 1.7, () => ui.eyes(''));
   once('blink3', 2.4, () => ui.eyes('open'));
-  once('t1', 2.8, () => ui.thought('...where am I?', 2.6));
-  once('t2', 6.0, () => ui.thought('The plane. We crashed.', 2.8));
+  once('t1', 2.8, () => ui.thought(T('...where am I?'), 2.6));
+  once('t2', 6.0, () => ui.thought(T('The plane. We crashed.'), 2.8));
   ui.blur(Math.max(0, 10 - t * 2.2));
   // the Stand_Up clip is scrubbed by `lying`: still on the sand, then up over ~4.6 s
   player.lying = Math.max(0.0001, 1 - Math.min(1, Math.max(0, (t - 4.2) / 4.6)));
@@ -809,7 +811,7 @@ function startReveal() {
   const en = $('reveal-en'), he = $('reveal-he');
   en.textContent = '';
   he.classList.remove('show');
-  he.textContent = 'Someone planned this.';
+  he.textContent = T('Someone planned this.');
   ui.show('reveal', true);
   const text = 'THE CRASH WAS NO ACCIDENT.';
   let i = 0;
@@ -839,7 +841,7 @@ function startReveal() {
     // point the camera toward the signal above the jungle
     player.camYaw = Math.atan2(player.pos.x - 8, player.pos.z + 178);
     player.camPitch = 0.05;
-    api.thought('A red light, blinking, above the forest. Someone is transmitting.', 4.5, 0.9);
+    api.thought(T('A red light, blinking, above the forest. Someone is transmitting.'), 4.5, 0.9);
     setTimeout(() => showEndcard(1), 5200);
   }, 9000);
 }
@@ -850,22 +852,22 @@ function showEndcard(part) {
   releasePointer();
   const s = game.state;
   if (part === 1) {
-    $('end-kicker').textContent = 'End of Part 1';
-    $('end-title').textContent = 'The Crash';
-    $('end-obj').innerHTML = 'New mission: Find the source of the signal in the forest.';
-    $('btn-keep').textContent = 'Continue to Part 2';
+    $('end-kicker').textContent = T('End of Part 1');
+    $('end-title').textContent = T('The Crash');
+    $('end-obj').innerHTML = T('New mission: Find the source of the signal in the forest.');
+    $('btn-keep').textContent = T('Continue to Part 2');
   } else if (part === 2) {
-    $('end-kicker').textContent = 'End of Part 2';
-    $('end-title').textContent = 'The Signal';
-    $('end-obj').innerHTML = '<span class="end-en">Someone is still here.</span><br>The lights in the forest came on, and the signal moved north.';
-    $('btn-keep').textContent = 'Continue to Part 3';
+    $('end-kicker').textContent = T('End of Part 2');
+    $('end-title').textContent = T('The Signal');
+    $('end-obj').innerHTML = T('<span class="end-en">Someone is still here.</span><br>The lights in the forest came on, and the signal moved north.');
+    $('btn-keep').textContent = T('Continue to Part 3');
   } else {
-    $('end-kicker').textContent = 'Chapter 3 complete';
-    $('end-title').textContent = 'The Observer';
+    $('end-kicker').textContent = T('Chapter 3 complete');
+    $('end-title').textContent = T('The Observer');
     $('end-obj').innerHTML = '<span class="end-en">“Someone has been watching.”</span><br><span class="end-protocol">NIGHTJAR PROTOCOL — PHASE 3 ACTIVATED</span>';
-    $('btn-keep').textContent = 'Keep exploring';
+    $('btn-keep').textContent = T('Keep exploring');
   }
-  $('end-stats').textContent = `${s.clues.length} booklet entries · ${s.hintsUsed || 0} hints · progress saved`;
+  $('end-stats').textContent = T`${s.clues.length} booklet entries · ${s.hintsUsed || 0} hints · progress saved`;
   ui.show('endcard', true);
 }
 
@@ -881,9 +883,9 @@ function chapter3Intro() {
   s.flags.ch3Intro = true;
   persist();
   setTimeout(() => {
-    ui.titleCard('Chapter 3', 'The Observer');
+    ui.titleCard(T('Chapter 3'), T('The Observer'));
     audio.signalBeeps();
-    setTimeout(() => ui.toast('Objective: Follow the northbound signal.', 'quest', 5), 2600);
+    setTimeout(() => ui.toast(T('Objective: Follow the northbound signal.'), 'quest', 5), 2600);
   }, 600);
 }
 $('btn-end-main').addEventListener('click', () => { persist(); ui.show('endcard', false); showTitle(); });
@@ -893,7 +895,7 @@ function pause() {
   if (game.mode !== 'play') return;
   setMode('paused');
   persist();
-  $('pause-title').textContent = 'Paused';
+  $('pause-title').textContent = T('Paused');
   ui.show('pause-menu', true);
   ui.show('btn-settings-back', false);
   ui.show('pause', true);
@@ -967,6 +969,12 @@ bindSetting('set-sens', 'sens');
 bindSetting('set-vol', 'volume');
 bindSetting('set-invert', 'invertY', 'checked');
 bindSetting('set-quality', 'hq', 'checked');
+// language: English or Hebrew. Saved per browser; switching reloads the page (progress is saved).
+$('set-lang').value = LANG;
+const switchLang = (lang) => { if (game.mode === 'paused') persist(); setLang(lang); };
+$('set-lang').addEventListener('change', (e) => switchLang(e.target.value));
+$('btn-lang').textContent = LANG === 'he' ? 'English' : 'עברית';
+$('btn-lang').addEventListener('click', () => switchLang(LANG === 'he' ? 'en' : 'he'));
 bindSetting('set-shadows', 'shadows', 'checked');
 bindSetting('set-auto', 'autoQuality', 'checked');
 
@@ -983,7 +991,7 @@ $('btn-new').addEventListener('click', () => {
   if (saved && saved.flags.introDone) confirmNew(() => leaveLobby(newGame)); else leaveLobby(newGame);
 });
 $('btn-title-settings').addEventListener('click', () => {
-  $('pause-title').textContent = 'Settings';
+  $('pause-title').textContent = T('Settings');
   ui.show('pause-menu', false);
   ui.show('btn-settings-back', true);
   ui.show('pause', true);
@@ -991,7 +999,7 @@ $('btn-title-settings').addEventListener('click', () => {
 $('btn-settings-back').addEventListener('click', () => ui.show('pause', false));
 
 function confirmNew(onYes) {
-  $('confirm-text').textContent = 'Start a new game? Your saved progress in every part will be deleted.';
+  $('confirm-text').textContent = T('Start a new game? Your saved progress in every part will be deleted.');
   ui.show('confirm', true);
   $('confirm-yes').onclick = () => { ui.show('confirm', false); onYes(); };
   $('confirm-no').onclick = () => ui.show('confirm', false);
@@ -1071,12 +1079,12 @@ window.addEventListener('keydown', (e) => {
       if (game.mode === 'play') {
         settings.firstPerson = !settings.firstPerson;
         saveSettings(settings);
-        ui.toast(settings.firstPerson ? 'View: through the eyes · Q to switch back' : 'View: from behind · Q to switch', '', 2);
+        ui.toast(settings.firstPerson ? T('View: through the eyes · Q to switch back') : T('View: from behind · Q to switch'), '', 2);
       }
       break;
     case 'KeyF':
       if (game.mode === 'play') {
-        if (!has('flashlight')) { ui.toast('I haven\'t found a flashlight yet. Maybe in the wreckage.', 'warn'); break; }
+        if (!has('flashlight')) { ui.toast(T('I haven\'t found a flashlight yet. Maybe in the wreckage.'), 'warn'); break; }
         setFlashlight(!player.flashlightOn);
         audio.flashlight();
       }
@@ -1115,18 +1123,18 @@ function onBoundary(type) {
   const north = game.zone.boundaryText && game.zone.boundaryText(type, game.state);
   const msg = north || (forest ? {
     forest: game.state.flags.endingSeen
-      ? 'Too dense here. The lights are to the north-east: the trail past the camp leads that way.'
-      : 'The thicket to the north is too dense. The lights... are farther than they look.',
-    sea: 'The trail back to the beach is to the south, in the middle.',
-    side: 'The thicket is too dense to get through here.',
-    cliff: 'Too steep to climb. Maybe there is a way up somewhere else.',
+      ? T('Too dense here. The lights are to the north-east: the trail past the camp leads that way.')
+      : T('The thicket to the north is too dense. The lights... are farther than they look.'),
+    sea: T('The trail back to the beach is to the south, in the middle.'),
+    side: T('The thicket is too dense to get through here.'),
+    cliff: T('Too steep to climb. Maybe there is a way up somewhere else.'),
   }[type] : {
     forest: game.state.questIndex >= 6
-      ? 'The thicket is too dense here. The north trail, behind the tail, leads into the forest.'
-      : 'The jungle is too thick. First I should figure out what happened here.',
-    sea: 'The water is too deep. No point swimming without knowing where to.',
-    side: 'The rocks are too steep to climb.',
-    cliff: 'Too steep to climb here.',
+      ? T('The thicket is too dense here. The north trail, behind the tail, leads into the forest.')
+      : T('The jungle is too thick. First I should figure out what happened here.'),
+    sea: T('The water is too deep. No point swimming without knowing where to.'),
+    side: T('The rocks are too steep to climb.'),
+    cliff: T('Too steep to climb here.'),
   }[type]);
   ui.thought(msg, 3);
 }
@@ -1234,7 +1242,7 @@ function updatePlay(dt) {
   game.focused = best;
   if (best) tip('interact');
   if (best) ui.setPrompt(best.label(), best.locked ? best.locked() : false);
-  else if (player.sitting) ui.setPrompt('Stand up');
+  else if (player.sitting) ui.setPrompt(T('Stand up'));
   else ui.setPrompt(null);
 
   // item glints bob
