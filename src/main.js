@@ -20,7 +20,9 @@ import { GFX } from './gfx/materials.js';
 import { setAnisotropy } from './gfx/textures.js';
 import { TIERS, AutoQuality, FogCuller, guessTier } from './gfx/perf.js';
 import { Lobby } from './lobby.js';
-import { DEFAULT_SKIN } from './data/skins.js';
+import { DEFAULT_SKIN, skinById } from './data/skins.js';
+import { RemotePlayers } from './net/remotes.js';
+import { OnlinePanel } from './net/panel.js';
 import { Minimap, BigMap } from './systems/minimap.js';
 import { portal } from './portal.js';
 // fonts are bundled with the game (no outside requests, works on game portals)
@@ -212,6 +214,73 @@ const api = {
   showEndcard: (part) => showEndcard(part),
 };
 
+// ------------------------------------------------------------------ play with friends (src/net)
+// Not offered in the game-portal builds (Poki / CrazyGames), whose rules limit outside connections.
+const ONLINE_ALLOWED = !['poki', 'crazygames'].includes(import.meta.env.MODE);
+const net = { panel: null, remotes: null, online: null, names: new Map(), badgeT: 0 };
+const netName = () => settings.netName || skinById(player.skinId || settings.skin).name;
+
+function setupOnline() {
+  if (!ONLINE_ALLOWED) return;
+  net.remotes = new RemotePlayers(env.scene, player);
+  net.panel = new OnlinePanel({
+    getName: netName,
+    setName(name) {
+      const n = String(name || '').trim().slice(0, 16);
+      if (n === (settings.netName || '')) return;
+      settings.netName = n;
+      saveSettings(settings);
+      if (net.online) net.online.setProfile(netName(), player.skinId);
+    },
+    getSkin: () => player.skinId,
+    click: () => audio.click(),
+    onOpen() { releasePointer(); },
+    onClose() {},
+    onChatClosed() { game.input = {}; if (game.mode === 'play') requestPointer(); },
+    async connect() {
+      const { Online } = await import('./net/online.js');
+      net.online = new Online({
+        onStatus: (st, detail) => {
+          if (st === 'error' || st === 'offline') { net.remotes.clear(); net.names.clear(); }
+          net.panel.onStatus(st, detail);
+        },
+        onRoster: (list) => {
+          // announce who came and went
+          const now = new Map(list.filter((r) => !r.self).map((r) => [r.id, r.name]));
+          for (const [id, name] of now) if (!net.names.has(id)) net.panel.onJoinLeave(name, true);
+          for (const [id, name] of net.names) if (!now.has(id)) net.panel.onJoinLeave(name, false);
+          net.names = now;
+          net.remotes.syncRoster(list);
+          net.panel.onRoster(list);
+        },
+        onState: (id, st) => net.remotes.state(id, st),
+        onChat: (id, name, text) => { net.panel.onChat(name, text); audio.click(); },
+        onLeave: (id) => net.remotes.remove(id),
+      });
+      return net.online;
+    },
+  });
+  const make = (id) => { const b = document.createElement('button'); b.id = id; b.className = 'btn'; b.textContent = T('Play with Friends'); b.addEventListener('click', () => { audio.click(); net.panel.open(); }); return b; };
+  $('btn-title-settings').before(make('btn-online'));
+  $('btn-resume').after(make('btn-online2'));
+}
+
+// every frame: friends' avatars, and our own position to the room (~10/s)
+const NET_SEND_MODES = ['play', 'paused', 'journal', 'map', 'cine', 'scope', 'puzzle', 'keypad', 'storage', 'end'];
+function updateOnline(dt) {
+  if (!net.remotes || !game.zone) return;
+  const hidden = ['title', 'intro', 'wake', 'loading', 'transition'].includes(game.mode);
+  net.remotes.update(dt, game.zone.id, hidden);
+  const o = net.online;
+  if (!o || !o.active) return;
+  if (player.skinId && player.skinId !== o.me.skin) o.setProfile(netName(), player.skinId);
+  if (NET_SEND_MODES.includes(game.mode)) {
+    const p = player.pos;
+    o.tick(dt, { z: game.zone.id, x: +p.x.toFixed(2), y: +p.y.toFixed(2), z2: +p.z.toFixed(2), f: +player.facing.toFixed(3), v: +player.speed.toFixed(2), a: player.air ? 1 : 0, l: player.flashlightOn ? 1 : 0 });
+  }
+  if ((net.badgeT -= dt) < 0) { net.badgeT = 1; net.panel.renderBadge(net.remotes.nearby(game.zone.id)); }
+}
+
 // ------------------------------------------------------------------ boot
 async function boot() {
   await portal.init();
@@ -230,6 +299,7 @@ async function boot() {
     }
     intro = new IntroScene(audio, ui);
     lobby = new Lobby({ player, camera, settings, ui, hooks: { click: () => audio.click() } });
+    setupOnline();
     applySettings();
     // the lobby is on the beach; every other area is built and drawn once now, behind the loading screen
     const saved = loadState();
@@ -1110,6 +1180,9 @@ window.addEventListener('mousemove', (e) => {
 });
 
 window.addEventListener('keydown', (e) => {
+  // typing in a text box (name, room code, chat) never moves the survivor
+  if (e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName) && e.target.type !== 'range' && e.target.type !== 'checkbox') return;
+  if (e.code === 'Enter' && game.mode === 'play' && net.panel && net.panel.openChat()) { e.preventDefault(); game.input = {}; releasePointer(); return; }
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(e.code)) e.preventDefault();
   game.input[e.code] = true;
   if (e.repeat) return;
@@ -1147,6 +1220,7 @@ window.addEventListener('keydown', (e) => {
       }
       break;
     case 'Escape':
+      if (net.panel && net.panel.isOpen) { net.panel.close(); break; }
       if (game.mode === 'journal') closeJournal();
       else if (game.mode === 'map') closeMap();
       else if (game.mode === 'paused') resume();
@@ -1155,7 +1229,10 @@ window.addEventListener('keydown', (e) => {
       break;
   }
 });
-window.addEventListener('keyup', (e) => { game.input[e.code] = false; });
+window.addEventListener('keyup', (e) => {
+  if (e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName) && e.target.type !== 'range' && e.target.type !== 'checkbox') return;
+  game.input[e.code] = false;
+});
 window.addEventListener('blur', () => { game.input = {}; });
 
 // F takes the flashlight out (in both hands, lit) or puts it away (plain walking, still in the inventory)
@@ -1216,6 +1293,7 @@ function step(dt) {
   // binoculars keep the body in view
   player.setFirstPerson(!!settings.firstPerson && !['title', 'wake', 'cine', 'scope'].includes(m));
   if (m === 'title') {
+    updateOnline(dt); // keeps friends hidden behind the lobby
     if (!lobby.active) return;
     lobby.update(dt);
     env.update(dt, game.time, player.pos, camera);
@@ -1257,6 +1335,7 @@ function step(dt) {
   audio.setIndoor(amb.indoor || 0, amb.hum ?? 1);
   audio.updateAmbience(game.time, amb.sea, amb.forest, env.mode === 'night' ? 1 : 0, amb.stream);
   minimap.update(player.pos, player.camYaw, player.facing, game.state);
+  updateOnline(dt);
 }
 
 // modes in which the frame rate is measured for the automatic quality (the world is on screen and moving)
@@ -1322,7 +1401,7 @@ function updatePlay(dt) {
 // ------------------------------------------------------------------ debug hooks (only with ?debug)
 if (DEBUG) {
   window.__lost = {
-    game, renderer, settings, ui, seq, camera,
+    game, renderer, settings, ui, seq, camera, net,
     get player() { return player; },
     get zone() { return game.zone; },
     get env() { return env; },
