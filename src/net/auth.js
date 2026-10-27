@@ -6,6 +6,8 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || '';
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
 const KEY = 'lost_auth';
+export const API_URL = SUPABASE_URL.replace(/\/+$/, '');
+export const API_KEY = SUPABASE_KEY;
 export const AUTH_ENABLED = !!(SUPABASE_URL && SUPABASE_KEY);
 
 async function call(path, body, token) {
@@ -13,7 +15,7 @@ async function call(path, body, token) {
   if (token) headers.Authorization = `Bearer ${token}`;
   let res;
   try {
-    res = await fetch(SUPABASE_URL.replace(/\/+$/, '') + '/auth/v1/' + path, { method: 'POST', headers, body: JSON.stringify(body || {}) });
+    res = await fetch(API_URL + '/auth/v1/' + path, { method: 'POST', headers, body: JSON.stringify(body || {}) });
   } catch (e) {
     throw Object.assign(new Error('network'), { code: 'network' });
   }
@@ -35,8 +37,13 @@ function load() {
 function store(s) {
   try { if (s) localStorage.setItem(KEY, JSON.stringify(s)); else localStorage.removeItem(KEY); } catch (e) { /* this page only */ }
 }
+// the user id is in the token too ("sub"), for sessions saved without it
+function subOf(jwt) {
+  try { return JSON.parse(atob(jwt.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).sub || ''; } catch (e) { return ''; }
+}
 function fromResponse(d) {
   return {
+    id: (d.user && d.user.id) || subOf(d.access_token),
     access: d.access_token,
     refresh: d.refresh_token,
     expires: d.expires_at ? d.expires_at * 1000 : Date.now() + (d.expires_in || 3600) * 1000,
@@ -47,6 +54,8 @@ function fromResponse(d) {
 export const auth = {
   session: load(),
   get email() { return this.session ? this.session.email : ''; },
+  get id() { return this.session ? this.session.id || subOf(this.session.access) : ''; },
+  get token() { return this.session ? this.session.access : ''; },
 
   // true when there is a usable session (refreshed if it ran out)
   async check() {

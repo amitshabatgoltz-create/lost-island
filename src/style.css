@@ -576,7 +576,7 @@ html[dir="rtl"] #loading-fill { margin-left: auto; }
 
 /* ---------------------------------------------------------------- play with friends (src/net/panel.js) */
 .online-screen { background: rgba(3, 6, 10, 0.6); z-index: 40; }
-.online-panel { width: min(440px, 92vw); padding: 24px 28px; display: flex; flex-direction: column; gap: 12px; }
+.online-panel { width: min(440px, 92vw); max-height: 92vh; overflow-y: auto; padding: 24px 28px; display: flex; flex-direction: column; gap: 12px; }
 .online-panel h2 { margin: 0; letter-spacing: 0.04em; }
 .online-note { margin: 0; opacity: 0.8; font-size: 14px; line-height: 1.45; }
 .online-row { display: flex; align-items: center; gap: 10px; }
@@ -594,6 +594,13 @@ html[dir="rtl"] #loading-fill { margin-left: auto; }
 .online-account span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .online-account .btn { padding: 4px 10px; font-size: 13px; }
 .online-otp { letter-spacing: 0.4em; text-align: center; direction: ltr; font: 700 28px/1.1 ui-monospace, Menlo, Consolas, monospace !important; }
+.online-friends h3 { margin: 6px 0 0; font-size: 16px; letter-spacing: 0.04em; }
+.online-friends .online-join input { letter-spacing: normal; text-transform: none; text-align: start; direction: inherit; }
+.friend-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.friend-row bdi { font-weight: 700; }
+.friend-state { flex: 1; font-size: 12px; opacity: 0.65; }
+.friend-state.live { color: #9fd4a8; opacity: 1; }
+.friend-row .btn { padding: 4px 10px; font-size: 13px; align-self: center; }
 .online-msg { min-height: 1.2em; font-size: 14px; color: #9fd4a8; }
 .online-msg.bad { color: #f0a090; }
 .net-badge { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); z-index: 12; padding: 5px 12px; border-radius: 14px; background: rgba(10, 16, 22, 0.6); font-size: 13px; pointer-events: none; white-space: nowrap; }

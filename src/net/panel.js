@@ -1,7 +1,8 @@
-// "Online": email-code sign-in, then the room screen (create / join with a code), the in-game badge and the chat.
+// "Online": email-code sign-in, a username, friends, then the room screen (create / join with a code), the in-game badge and the chat.
 // The networking code (and PeerJS) is only downloaded the first time this screen is opened.
 import { T } from '../i18n/index.js';
 import { auth, AUTH_ENABLED } from './auth.js';
+import { social, USERNAME_RE } from './social.js';
 
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 
@@ -12,6 +13,14 @@ const ERRORS = () => ({
   'timeout': T('Could not reach the room. Try again.'),
   'host-left': T('The room was closed by the friend who created it.'),
   'network': T('Connection problem. Check the internet and try again.'),
+});
+
+const FRIEND_RESULTS = () => ({
+  'sent': T('Friend request sent! When they accept, they will show up here.'),
+  'accepted': T('You are friends now!'),
+  'not-found': T('No player with this username.'),
+  'self': T('That is you :)'),
+  'already': T('You are already friends, or a request is waiting.'),
 });
 
 const AUTH_ERRORS = () => ({
@@ -68,11 +77,31 @@ export class OnlinePanel {
     this.loginView.append(this.emailStep, this.codeStep);
     p.append(this.loginView);
 
+    // first sign-in: pick the username, which is also the name over your head in the game
+    this.loadingView = el('div', 'online-view hidden');
+    this.loadingView.append(el('p', 'online-note', T('Loading…')));
+    p.append(this.loadingView);
+    this.userView = el('div', 'online-view hidden');
+    this.userView.append(el('p', 'online-note', T('Choose a username. This is your name in the game, and friends add you by it. 3 to 16 letters, digits or _.')));
+    this.userIn = el('input');
+    this.userIn.maxLength = 16;
+    this.userIn.autocomplete = 'off';
+    this.userIn.placeholder = T('Username');
+    this.userIn.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') this.saveUsername(); });
+    const saveUser = el('button', 'btn primary', T('Save'));
+    saveUser.addEventListener('click', () => this.saveUsername());
+    this.userView.append(this.userIn, saveUser);
+    p.append(this.userView);
+
     this.mainView = el('div', 'online-view');
     this.account = el('div', 'online-account hidden');
     this.accountEmail = el('span');
     const signOut = el('button', 'btn ghost small', T('Sign out'));
-    signOut.addEventListener('click', () => { this.hooks.click(); this.online && this.online.leave(); auth.signOut(); this.setMsg(''); this.render(); });
+    signOut.addEventListener('click', () => {
+      this.hooks.click();
+      this.online && this.online.leave();
+      social.setRoom(null).then(() => { auth.signOut(); social.signOut(); this.setMsg(''); this.render(); });
+    });
     this.account.append(this.accountEmail, signOut);
     this.mainView.append(this.account);
 
@@ -83,6 +112,7 @@ export class OnlinePanel {
     this.nameIn.autocomplete = 'off';
     this.nameIn.addEventListener('change', () => this.hooks.setName(this.nameIn.value));
     nameRow.append(this.nameIn);
+    this.nameRow = nameRow;
     this.mainView.append(nameRow);
 
     // offline: create or join
@@ -116,6 +146,22 @@ export class OnlinePanel {
     leave.addEventListener('click', () => { this.hooks.click(); this.online && this.online.leave(); });
     this.onView.append(this.codeBox, copy, this.shareNote, this.list, leave);
     this.mainView.append(this.onView);
+
+    // friends (signed-in players only): requests, friends and the rooms they are in, add by username
+    this.friendsView = el('div', 'online-view online-friends hidden');
+    this.friendsView.append(el('h3', null, T('Friends')));
+    this.friendsList = el('ul', 'online-list');
+    const addRow = el('div', 'online-join');
+    this.friendIn = el('input');
+    this.friendIn.maxLength = 16;
+    this.friendIn.autocomplete = 'off';
+    this.friendIn.placeholder = T("Friend's username");
+    this.friendIn.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') this.addFriend(); });
+    const add = el('button', 'btn', T('Add'));
+    add.addEventListener('click', () => this.addFriend());
+    addRow.append(this.friendIn, add);
+    this.friendsView.append(this.friendsList, addRow);
+    this.mainView.append(this.friendsView);
     p.append(this.mainView);
 
     this.msg = el('div', 'online-msg');
@@ -151,10 +197,133 @@ export class OnlinePanel {
     this.render();
     this.hooks.onOpen();
     // a saved session may need refreshing; until then the sign-in view stays up
-    if (AUTH_ENABLED && auth.session) auth.check().then(() => this.render());
+    if (AUTH_ENABLED && auth.session) auth.check().then(() => this.afterSignIn());
+    clearInterval(this.friendsTimer);
+    this.friendsTimer = setInterval(() => { if (this.isOpen) this.refreshFriends(); else clearInterval(this.friendsTimer); }, 15000);
   }
 
   get signedIn() { return !AUTH_ENABLED || !!auth.session; }
+
+  // 'login' -> 'loading' -> 'username' (first time) -> 'main'
+  get stage() {
+    if (!this.signedIn) return 'login';
+    if (!AUTH_ENABLED) return 'main';
+    if (this.profileState === 'none') return 'username';
+    return this.profileState === 'ok' ? 'main' : 'loading';
+  }
+
+  async afterSignIn() {
+    if (!auth.session) { this.render(); return; }
+    if (this.profileState !== 'ok') {
+      this.render();
+      try {
+        const prof = await social.loadProfile();
+        this.profileState = prof ? 'ok' : 'none';
+      } catch (e) {
+        console.error(e);
+        this.setMsg(ERRORS().network, true);
+      }
+    }
+    if (this.profileState === 'ok') this.useUsername();
+    this.render();
+    if (this.profileState === 'none') this.userIn.focus();
+    this.refreshFriends();
+  }
+
+  useUsername() {
+    this.hooks.setName(social.profile.username);
+    if (this.online) this.online.setProfile(this.hooks.getName(), this.hooks.getSkin());
+  }
+
+  async saveUsername() {
+    if (this.busy) return;
+    this.hooks.click();
+    const name = this.userIn.value.trim();
+    if (!USERNAME_RE.test(name)) { this.setMsg(T('3 to 16 letters, digits or _ (no spaces).'), true); return; }
+    this.busy = true;
+    this.setMsg(T('Saving…'));
+    try {
+      await social.createProfile(name);
+      this.profileState = 'ok';
+      this.useUsername();
+      this.setMsg(T`Hi ${name}!`);
+      this.render();
+      this.refreshFriends();
+    } catch (e) {
+      console.error(e);
+      this.setMsg(e.code === 'taken' ? T('This username is taken. Try another one.') : ERRORS().network, true);
+    }
+    this.busy = false;
+  }
+
+  // ------------------------------------------------------------------ friends
+  async refreshFriends() {
+    if (this.stage !== 'main' || !AUTH_ENABLED || this.loadingFriends) return;
+    this.loadingFriends = true;
+    try { this.friendData = await social.friends(); } catch (e) { console.error(e); }
+    this.loadingFriends = false;
+    this.renderFriends();
+  }
+
+  async addFriend() {
+    if (this.busy) return;
+    this.hooks.click();
+    const name = this.friendIn.value.trim();
+    if (!USERNAME_RE.test(name)) { this.setMsg(FRIEND_RESULTS()['not-found'], true); return; }
+    this.busy = true;
+    try {
+      const r = await social.addFriend(name);
+      this.setMsg(FRIEND_RESULTS()[r], r === 'not-found' || r === 'self');
+      if (r === 'sent' || r === 'accepted') this.friendIn.value = '';
+      await this.refreshFriends();
+    } catch (e) {
+      console.error(e);
+      this.setMsg(ERRORS().network, true);
+    }
+    this.busy = false;
+  }
+
+  async friendAction(fn) {
+    this.hooks.click();
+    try { await fn(); } catch (e) { console.error(e); this.setMsg(ERRORS().network, true); }
+    this.refreshFriends();
+  }
+
+  renderFriends() {
+    const d = this.friendData;
+    this.friendsList.innerHTML = '';
+    if (!d) return;
+    const inRoom = !!(this.online && this.online.active);
+    const button = (text, cls, fn) => { const b = el('button', 'btn small ' + cls, text); b.addEventListener('click', fn); return b; };
+    for (const f of d.incoming) {
+      const li = el('li', 'friend-row');
+      li.append(el('bdi', null, f.username), el('span', 'friend-state', T('wants to be your friend')));
+      li.append(button(T('Accept'), 'primary', () => this.friendAction(() => social.accept(f.id))));
+      li.append(button(T('Decline'), 'ghost', () => this.friendAction(() => social.remove(f.id))));
+      this.friendsList.append(li);
+    }
+    for (const f of d.friends) {
+      const li = el('li', 'friend-row');
+      li.append(el('bdi', null, f.username));
+      li.append(el('span', 'friend-state' + (f.room ? ' live' : ''), f.room ? T`in room ${f.room}` : T('not in a room')));
+      if (f.room && !(inRoom && this.online.code === f.room)) {
+        li.append(button(T('Join'), 'primary', () => {
+          if (inRoom) this.online.leave();
+          this.codeIn.value = f.room;
+          this.act('join');
+        }));
+      }
+      li.append(button('✕', 'ghost', () => { if (confirm(T`Remove ${f.username} from your friends?`)) this.friendAction(() => social.remove(f.id)); }));
+      this.friendsList.append(li);
+    }
+    for (const f of d.outgoing) {
+      const li = el('li', 'friend-row');
+      li.append(el('bdi', null, f.username), el('span', 'friend-state', T('request sent')));
+      li.append(button('✕', 'ghost', () => this.friendAction(() => social.remove(f.id))));
+      this.friendsList.append(li);
+    }
+    if (!d.incoming.length && !d.friends.length && !d.outgoing.length) this.friendsList.append(el('li', 'online-note', T('No friends yet. Add a friend by their username.')));
+  }
 
   // ------------------------------------------------------------------ sign in
   showCodeStep(on) {
@@ -194,7 +363,8 @@ export class OnlinePanel {
       await auth.verify(this.pendingEmail, code);
       this.showCodeStep(false);
       this.setMsg(T('Signed in!'));
-      this.render();
+      this.profileState = null;
+      await this.afterSignIn();
     } catch (e) {
       console.error(e);
       this.setMsg(AUTH_ERRORS()[e.code] || AUTH_ERRORS().network, true);
@@ -202,7 +372,7 @@ export class OnlinePanel {
     this.busy = false;
   }
   close() {
-    this.hooks.setName(this.nameIn.value);
+    if (!AUTH_ENABLED) this.hooks.setName(this.nameIn.value);
     this.screen.classList.add('hidden');
     this.hooks.onClose();
   }
@@ -210,8 +380,8 @@ export class OnlinePanel {
 
   async act(kind) {
     this.hooks.click();
-    if (!this.signedIn) { this.render(); return; }
-    this.hooks.setName(this.nameIn.value);
+    if (this.stage !== 'main') { this.render(); return; }
+    if (!AUTH_ENABLED) this.hooks.setName(this.nameIn.value);
     if (!this.online) {
       this.setMsg(T('Connecting…'));
       try { this.online = await this.hooks.connect(); } catch (e) { console.error(e); this.setMsg(ERRORS().network, true); return; }
@@ -223,6 +393,15 @@ export class OnlinePanel {
   // ------------------------------------------------------------------ events from Online
   onStatus(status, detail) {
     this.status = status;
+    // friends see which room we are in (refreshed every minute while we stay)
+    if (AUTH_ENABLED && social.profile) {
+      clearInterval(this.roomTimer);
+      if (status === 'hosting' || status === 'joined') {
+        const code = this.online.code;
+        social.setRoom(code);
+        this.roomTimer = setInterval(() => social.setRoom(code), 60000);
+      } else if (status === 'offline' || status === 'error') social.setRoom(null);
+    }
     if (status === 'connecting') this.setMsg(T('Connecting…'));
     else if (status === 'hosting' || status === 'joined') { this.setMsg(status === 'joined' ? T('Connected!') : ''); if (status === 'joined') this.addLine(null, T('You joined the room.')); }
     else if (status === 'error') { this.setMsg(ERRORS()[detail] || ERRORS().network, true); this.addLine(null, ERRORS()[detail] || ERRORS().network); }
@@ -239,11 +418,17 @@ export class OnlinePanel {
   }
 
   render() {
-    const signedIn = this.signedIn;
-    this.loginView.classList.toggle('hidden', signedIn);
-    this.mainView.classList.toggle('hidden', !signedIn);
-    this.account.classList.toggle('hidden', !(AUTH_ENABLED && signedIn));
-    if (AUTH_ENABLED && signedIn) this.accountEmail.replaceChildren(T('Signed in as') + ' ', el('bdi', null, auth.email));
+    const stage = this.stage;
+    const signedIn = AUTH_ENABLED && stage === 'main';
+    this.loginView.classList.toggle('hidden', stage !== 'login');
+    this.loadingView.classList.toggle('hidden', stage !== 'loading');
+    this.userView.classList.toggle('hidden', stage !== 'username');
+    this.mainView.classList.toggle('hidden', stage !== 'main');
+    this.account.classList.toggle('hidden', !signedIn);
+    this.friendsView.classList.toggle('hidden', !signedIn);
+    this.nameRow.classList.toggle('hidden', signedIn);
+    if (signedIn) { const b = el('b'); b.append(el('bdi', null, social.profile.username)); this.accountEmail.replaceChildren(b, ' · ', el('bdi', null, auth.email)); }
+    if (signedIn) this.renderFriends();
     const on = !!(this.online && this.online.active);
     this.offView.classList.toggle('hidden', on);
     this.onView.classList.toggle('hidden', !on);
