@@ -26,8 +26,6 @@ create policy "see your own friendships" on public.friendships for select to aut
 create policy "send friend requests" on public.friendships for insert to authenticated with check (requester = auth.uid() and status = 'pending');
 create policy "accept requests sent to you" on public.friendships for update to authenticated using (addressee = auth.uid()) with check (addressee = auth.uid() and status = 'accepted');
 create policy "decline or remove friends" on public.friendships for delete to authenticated using (auth.uid() in (requester, addressee));
-revoke update on public.friendships from authenticated;
-grant update (status) on public.friendships to authenticated;
 
 -- which room a player is in; only accepted friends can see it
 create table public.presence (
@@ -45,3 +43,8 @@ create policy "friends see your room" on public.presence for select to authentic
 );
 create policy "set your own room" on public.presence for insert to authenticated with check (id = auth.uid());
 create policy "update your own room" on public.presence for update to authenticated using (id = auth.uid()) with check (id = auth.uid());
+
+-- table access for signed-in players (the policies above decide which rows)
+grant select, insert, update, delete on public.profiles, public.friendships, public.presence to authenticated;
+revoke update on public.friendships from authenticated;
+grant update (status) on public.friendships to authenticated;
