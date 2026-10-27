@@ -261,7 +261,7 @@ function setupOnline() {
       return net.online;
     },
   });
-  const make = (id) => { const b = document.createElement('button'); b.id = id; b.className = 'btn'; b.textContent = T('Play with Friends'); b.addEventListener('click', () => { audio.click(); net.panel.open(); }); return b; };
+  const make = (id) => { const b = document.createElement('button'); b.id = id; b.className = 'btn'; b.textContent = T('Online'); b.addEventListener('click', () => { audio.click(); net.panel.open(); }); return b; };
   $('btn-title-settings').before(make('btn-online'));
   $('btn-resume').after(make('btn-online2'));
 }
