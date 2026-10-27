@@ -67,8 +67,10 @@ const ui = new UI();
 const audio = new AudioSystem();
 const settings = loadSettings();
 // automatic quality: resolution, effects and shadow detail follow the measured frame rate (see gfx/perf.js)
-const autoQ = new AutoQuality(settings.perfTier ?? guessTier(renderer), (tier) => {
-  settings.perfTier = tier;
+// (perfLevel replaces the old perfTier, whose lowest levels rendered below full resolution)
+delete settings.perfTier;
+const autoQ = new AutoQuality(settings.perfLevel ?? guessTier(renderer), (tier) => {
+  settings.perfLevel = tier;
   saveSettings(settings);
   applyQuality();
 });
@@ -978,6 +980,7 @@ function applyQuality() {
   post.setSamples(t.samples);
   GFX.detail.value = high && t.detail ? 1 : 0;
   env.setShadowQuality(high ? t.shadow : 1024);
+  fogCull.maxDist = t.veg;
   applyPixelRatio();
 }
 

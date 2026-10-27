@@ -2,15 +2,18 @@
 // and fog culling (vegetation chunks that are fully hidden in the fog are not drawn at all).
 import * as THREE from 'three';
 
-// From best to cheapest. `pr` is the highest pixel ratio of the tier (never above the screen's own),
-// `samples` the MSAA of the post-processing target, `post` bloom + colour grade, `detail` terrain blending.
+// From best to cheapest. `pr` is the highest pixel ratio of the tier (never above the screen's own, and never
+// below 1: a blurry picture is worse than a few lost frames). Shadows, MSAA, effects and far vegetation go first.
+// `samples` the MSAA of the post-processing target, `post` bloom + colour grade, `detail` terrain blending,
+// `veg` the farthest a chunk of trees and plants is drawn (0 = only the fog decides).
 export const TIERS = [
-  { pr: 1.5, samples: 4, shadow: 2048, post: true, detail: true },
-  { pr: 1.25, samples: 4, shadow: 2048, post: true, detail: true },
-  { pr: 1.0, samples: 4, shadow: 2048, post: true, detail: true },
-  { pr: 0.85, samples: 2, shadow: 1024, post: true, detail: true },
-  { pr: 0.75, samples: 0, shadow: 1024, post: false, detail: false },
-  { pr: 0.6, samples: 0, shadow: 1024, post: false, detail: false },
+  { pr: 1.5, samples: 4, shadow: 2048, post: true, detail: true, veg: 0 },
+  { pr: 1.25, samples: 4, shadow: 2048, post: true, detail: true, veg: 0 },
+  { pr: 1.0, samples: 4, shadow: 2048, post: true, detail: true, veg: 0 },
+  { pr: 1.0, samples: 4, shadow: 1024, post: true, detail: true, veg: 0 },
+  { pr: 1.0, samples: 2, shadow: 1024, post: true, detail: true, veg: 160 },
+  { pr: 1.0, samples: 0, shadow: 1024, post: false, detail: true, veg: 130 },
+  { pr: 1.0, samples: 0, shadow: 1024, post: false, detail: false, veg: 100 },
 ];
 const SLOW = 1 / 42; // average frame time that counts as stutter
 const FAST = 1 / 57; // average frame time that leaves room for a better tier
@@ -25,7 +28,7 @@ export function guessTier(renderer) {
     const ext = gl.getExtension('WEBGL_debug_renderer_info');
     name = String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)).toLowerCase();
   } catch (e) { /* unknown GPU */ }
-  if (/swiftshader|llvmpipe|software|basic render/.test(name)) return 4;
+  if (/swiftshader|llvmpipe|software|basic render/.test(name)) return 5;
   if (/intel|mali|adreno|powervr|videocore/.test(name)) return 2;
   return 0;
 }
@@ -71,7 +74,7 @@ export class AutoQuality {
   // the next tier that really changes something (on a plain 1x screen the top three tiers look the same)
   step(from, dir) {
     const dpr = window.devicePixelRatio || 1;
-    const key = (t) => { const x = TIERS[t]; return [Math.min(dpr, x.pr), x.samples, x.shadow, x.post, x.detail].join(); };
+    const key = (t) => { const x = TIERS[t]; return [Math.min(dpr, x.pr), x.samples, x.shadow, x.post, x.detail, x.veg].join(); };
     let t = from + dir;
     while (t + dir >= 0 && t + dir < TIERS.length && key(t) === key(from)) t += dir;
     return t;
@@ -94,6 +97,7 @@ export class FogCuller {
     this.items = [];
     this.t = 0;
     this.hidden = 0;
+    this.maxDist = 0; // set by the automatic quality on its cheapest tiers
   }
 
   setZone(group) {
@@ -121,7 +125,7 @@ export class FogCuller {
     let hidden = 0;
     for (const it of this.items) {
       const d = Math.max(0, it.c.distanceTo(p) - it.r);
-      let off = it.far > 0 && d > it.far;
+      let off = (it.far > 0 && d > it.far) || (this.maxDist > 0 && d > this.maxDist);
       if (!off && fog && fog.isFogExp2) {
         const h = Math.max(0.5 * (it.c.y + it.r + p.y), 0);
         const fd = fog.density * (0.35 + 0.65 * Math.exp(-h * 0.06));
