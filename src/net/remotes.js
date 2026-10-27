@@ -9,6 +9,7 @@ const SCALE = 0.0104;
 const CLIP_WALK = 1.63 * SCALE * 100, CLIP_RUN = 4.0 * SCALE * 100;
 const HIPS = 'mixamorig10Hips';
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
+const TAG_H = 0.05; // name tag height (a share of the screen height, roughly)
 const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 
 function nameTag(text) {
@@ -24,9 +25,10 @@ function nameTag(text) {
   c.fillText(text, 256, 58);
   const tex = new THREE.CanvasTexture(cv);
   tex.colorSpace = THREE.SRGBColorSpace;
-  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, fog: false }));
-  s.scale.set(1.15, 0.25, 1);
-  s.renderOrder = 5;
+  // the same size on screen at any distance, and drawn over trees and rocks so a friend is never lost
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, depthTest: false, sizeAttenuation: false, fog: false }));
+  s.scale.set(TAG_H * 512 / 112, TAG_H, 1);
+  s.renderOrder = 999;
   return s;
 }
 
