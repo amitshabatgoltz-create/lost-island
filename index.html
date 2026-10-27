@@ -6,6 +6,12 @@
   <title>LOST: The Missing Island</title>
   <meta name="description" content="A 3D survival mystery game in your browser. Part 1: The Crash · Part 2: The Signal." />
   <link rel="stylesheet" href="./src/style.css" />
+  <meta property="og:title" content="LOST: The Missing Island" />
+  <meta property="og:description" content="A 3D survival mystery game in your browser." />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="cover.jpg" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:image" content="cover.jpg" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%230b1118'/%3E%3Ccircle cx='50' cy='50' r='30' fill='none' stroke='%238fc4ff' stroke-width='7' stroke-dasharray='40 10'/%3E%3Cline x1='50' y1='32' x2='50' y2='68' stroke='%238fc4ff' stroke-width='7'/%3E%3C/svg%3E" />
 </head>
 <body>
@@ -13,33 +19,9 @@
 
   <!-- loading -->
   <div id="loading" class="screen">
-    <!-- a survivor runs along the night beach while the world loads (CSS only: it keeps moving while the game is busy) -->
-    <div class="ld-scene" aria-hidden="true">
-      <div class="ld-stars"></div>
-      <div class="ld-moon"></div>
-      <div class="ld-plane"><i class="ld-trail"></i><svg viewBox="0 0 64 24"><path d="M2 13 L14 11 L22 2 L28 2 L24 11 L46 10 C56 10 62 11 62 13 C62 15 56 16 46 16 L24 15 L28 23 L22 23 L14 15 Z" /></svg></div>
-      <div class="ld-layer ld-far"></div>
-      <div class="ld-sea"><i></i></div>
-      <div class="ld-layer ld-near"></div>
-      <div class="ld-ground"></div>
-      <div class="ld-runner">
-        <div class="ld-body">
-          <i class="ld-limb ld-arm ld-back"><i></i></i>
-          <i class="ld-limb ld-leg ld-back"><i></i></i>
-          <i class="ld-torso"></i>
-          <i class="ld-head"></i>
-          <i class="ld-limb ld-leg ld-front"><i></i></i>
-          <i class="ld-limb ld-arm ld-front"><i></i><b class="ld-beam"></b></i>
-        </div>
-        <i class="ld-shadow"></i>
-        <i class="ld-dust"></i><i class="ld-dust d2"></i>
-      </div>
-    </div>
     <div class="loading-inner">
-      <div class="logo small"><span class="logo-lost">LOST</span><span class="logo-sub">THE MISSING ISLAND</span></div>
-      <div class="bar"><div id="loading-fill"></div></div>
       <div class="ld-row"><span id="loading-text">Loading…</span><span id="loading-pct">0%</span></div>
-      <div id="loading-tip"></div>
+      <div class="bar"><div id="loading-fill"></div></div>
     </div>
   </div>
 
