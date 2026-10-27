@@ -1094,6 +1094,7 @@ export const HE_HTML = {
  "Controls:": "שליטה:",
  "WASD move · mouse look · Shift run · E interact · J journal and booklet · H hint · F flashlight · Esc menu": "WASD תנועה · עכבר מצלמה · Shift ריצה · E אינטראקציה · J חקירה וחוברת · H רמז · F פנס · Esc תפריט",
  "Progress is saved automatically.": "ההתקדמות נשמרת אוטומטית.",
+ "Terms & Privacy": "תנאי שימוש ופרטיות",
  "Back": "חזרה",
  "Yes": "כן",
  "End of Part 1": "סוף חלק 1",
