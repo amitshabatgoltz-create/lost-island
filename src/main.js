@@ -25,6 +25,7 @@ import { RemotePlayers } from './net/remotes.js';
 import { OnlinePanel } from './net/panel.js';
 import { Minimap, BigMap } from './systems/minimap.js';
 import { portal } from './portal.js';
+import { LegalPanel } from './legal.js';
 // fonts are bundled with the game (no outside requests, works on game portals)
 import '@fontsource/heebo/300.css';
 import '@fontsource/heebo/400.css';
@@ -1124,6 +1125,8 @@ $('btn-title-settings').addEventListener('click', () => {
   ui.show('pause', true);
 });
 $('btn-settings-back').addEventListener('click', () => ui.show('pause', false));
+const legal = new LegalPanel();
+$('btn-legal').addEventListener('click', () => { audio.click(); legal.open(); });
 
 function confirmNew(onYes) {
   $('confirm-text').textContent = T('Start a new game? Your saved progress in every part will be deleted.');
@@ -1220,6 +1223,7 @@ window.addEventListener('keydown', (e) => {
       }
       break;
     case 'Escape':
+      if (legal.isOpen) { legal.close(); break; }
       if (net.panel && net.panel.isOpen) { net.panel.close(); break; }
       if (game.mode === 'journal') closeJournal();
       else if (game.mode === 'map') closeMap();
