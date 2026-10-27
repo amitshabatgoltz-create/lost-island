@@ -121,8 +121,9 @@ class Avatar {
 
   update(dt, zoneId) {
     const s = this.target;
-    // a friend who stopped sending (paused tab, lobby, lost connection) fades from the world after a few seconds
-    this.root.visible = !!s && s.z === zoneId && performance.now() - this.at < 6000;
+    // h: the friend is in the menus (not in the world); a friend whose tab stopped sending (minimised, lost
+    // connection) stays where they were for a while, then disappears
+    this.root.visible = !!s && !s.h && s.z === zoneId && performance.now() - this.at < 30000;
     if (!this.root.visible) return;
     const k = 1 - Math.exp(-dt * 10);
     const before = this.pos.clone();
@@ -192,5 +193,5 @@ export class RemotePlayers {
   }
 
   // friends in the same zone (for the HUD)
-  nearby(zoneId) { return [...this.avatars.values()].filter((a) => a.zone === zoneId && performance.now() - (a.at || 0) < 6000).length; }
+  nearby(zoneId) { return [...this.avatars.values()].filter((a) => a.zone === zoneId && a.target && !a.target.h && performance.now() - (a.at || 0) < 30000).length; }
 }

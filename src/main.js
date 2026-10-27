@@ -274,10 +274,10 @@ function updateOnline(dt) {
   const o = net.online;
   if (!o || !o.active) return;
   if (player.skinId && player.skinId !== o.me.skin) o.setProfile(netName(), player.skinId);
-  if (NET_SEND_MODES.includes(game.mode)) {
-    const p = player.pos;
-    o.tick(dt, { z: game.zone.id, x: +p.x.toFixed(2), y: +p.y.toFixed(2), z2: +p.z.toFixed(2), f: +player.facing.toFixed(3), v: +player.speed.toFixed(2), a: player.air ? 1 : 0, l: player.flashlightOn ? 1 : 0 });
-  }
+  const p = player.pos;
+  // outside the game itself (lobby, intro, wake-up) friends are told to hide this player
+  const inWorld = NET_SEND_MODES.includes(game.mode);
+  o.tick(dt, { z: game.zone.id, x: +p.x.toFixed(2), y: +p.y.toFixed(2), z2: +p.z.toFixed(2), f: +player.facing.toFixed(3), v: inWorld ? +player.speed.toFixed(2) : 0, a: player.air ? 1 : 0, l: player.flashlightOn ? 1 : 0, h: inWorld ? 0 : 1 });
   if ((net.badgeT -= dt) < 0) { net.badgeT = 1; net.panel.renderBadge(net.remotes.nearby(game.zone.id)); }
 }
 
