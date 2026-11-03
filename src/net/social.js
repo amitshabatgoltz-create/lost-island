@@ -20,7 +20,9 @@ async function rest(method, path, body, prefer) {
   }
   const data = res.status === 204 ? null : await res.json().catch(() => null);
   if (!res.ok) {
-    const code = data && data.code === '23505' ? 'taken' : 'network';
+    // 404 / PGRST205 / 42P01: the tables were never created (docs/online-setup.sql not run in the project)
+    const missing = res.status === 404 || (data && ['PGRST205', 'PGRST204', '42P01'].includes(data.code));
+    const code = data && data.code === '23505' ? 'taken' : missing ? 'no-tables' : 'network';
     throw Object.assign(new Error((data && data.message) || String(res.status)), { code });
   }
   return data;

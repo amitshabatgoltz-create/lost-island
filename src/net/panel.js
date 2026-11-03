@@ -209,7 +209,8 @@ export class OnlinePanel {
     if (!this.signedIn) return 'login';
     if (!AUTH_ENABLED) return 'main';
     if (this.profileState === 'none') return 'username';
-    return this.profileState === 'ok' ? 'main' : 'loading';
+    // 'skip': usernames and friends could not load; rooms with a code still work
+    return this.profileState === 'ok' || this.profileState === 'skip' ? 'main' : 'loading';
   }
 
   async afterSignIn() {
@@ -220,8 +221,12 @@ export class OnlinePanel {
         const prof = await social.loadProfile();
         this.profileState = prof ? 'ok' : 'none';
       } catch (e) {
+        // never leave the player stuck on "Loading…": open the rooms without usernames and friends
         console.error(e);
-        this.setMsg(ERRORS().network, true);
+        this.profileState = 'skip';
+        this.setMsg(e.code === 'no-tables'
+          ? T('Usernames and friends are not set up yet. You can still create or join a room with a code.')
+          : T('Could not load your username and friends. You can still create or join a room with a code.'), true);
       }
     }
     if (this.profileState === 'ok') this.useUsername();
@@ -258,7 +263,7 @@ export class OnlinePanel {
 
   // ------------------------------------------------------------------ friends
   async refreshFriends() {
-    if (this.stage !== 'main' || !AUTH_ENABLED || this.loadingFriends) return;
+    if (this.stage !== 'main' || !AUTH_ENABLED || this.profileState !== 'ok' || this.loadingFriends) return;
     this.loadingFriends = true;
     try { this.friendData = await social.friends(); } catch (e) { console.error(e); }
     this.loadingFriends = false;
@@ -419,7 +424,7 @@ export class OnlinePanel {
 
   render() {
     const stage = this.stage;
-    const signedIn = AUTH_ENABLED && stage === 'main';
+    const signedIn = AUTH_ENABLED && stage === 'main' && this.profileState === 'ok';
     this.loginView.classList.toggle('hidden', stage !== 'login');
     this.loadingView.classList.toggle('hidden', stage !== 'loading');
     this.userView.classList.toggle('hidden', stage !== 'username');

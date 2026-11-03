@@ -1,6 +1,8 @@
 // Hebrew text, keyed by the English text it replaces. Templates use {0}, {1}... for the values in ${...}.
 // Keep new keys exactly equal to the English string in the code.
 export const HE = {
+ "Usernames and friends are not set up yet. You can still create or join a room with a code.": "שמות משתמש וחברים עוד לא הוגדרו. אפשר בינתיים ליצור חדר או להצטרף עם קוד.",
+ "Could not load your username and friends. You can still create or join a room with a code.": "לא הצלחתי לטעון את שם המשתמש והחברים. אפשר בינתיים ליצור חדר או להצטרף עם קוד.",
  "Online": "אונליין",
  "Loading…": "טוען…",
  "Choose a username. This is your name in the game, and friends add you by it. 3 to 16 letters, digits or _.": "בחר שם משתמש. זה השם שלך במשחק, וחברים מוסיפים אותך לפיו. 3 עד 16 אותיות, ספרות או _.",
