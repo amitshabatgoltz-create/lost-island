@@ -1,0 +1,55 @@
+name: Build itch.io zip
+
+# Builds the browser version as one zip (index.html at the top) ready to
+# upload to itch.io, and puts it on the "LOST for itch.io" release page.
+# Runs on every push to main, or by hand from the Actions tab.
+# On pull requests it only checks that the zip builds.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths: ['.github/workflows/itch.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: itch
+  cancel-in-progress: true
+
+jobs:
+  web-zip:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      # itch.io needs index.html at the top of the zip, so zip what is
+      # inside dist and not the dist folder itself.
+      - name: Make zip
+        run: |
+          cd dist
+          zip -r ../LOST-web.zip .
+          cd ..
+          unzip -l LOST-web.zip
+      - uses: actions/upload-artifact@v4
+        if: github.event_name == 'pull_request'
+        with:
+          name: LOST-web
+          path: LOST-web.zip
+      - name: Publish release
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete itch-latest --cleanup-tag --yes || true
+          gh release create itch-latest LOST-web.zip \
+            --target "$GITHUB_SHA" \
+            --title "LOST for itch.io (browser zip)" \
+            --latest=false \
+            --notes "Download **LOST-web.zip** and upload it to the itch.io game page (Kind of project: HTML, tick 'This file will be played in the browser'). Do not unzip it."
