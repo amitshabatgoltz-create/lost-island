@@ -26,6 +26,7 @@ import { OnlinePanel } from './net/panel.js';
 import { Minimap, BigMap } from './systems/minimap.js';
 import { portal } from './portal.js';
 import { LegalPanel } from './legal.js';
+import { GamepadInput } from './gamepad.js';
 // fonts are bundled with the game (no outside requests, works on game portals)
 import '@fontsource/heebo/300.css';
 import '@fontsource/heebo/400.css';
@@ -126,12 +127,24 @@ const TIPS = {
   forest: T('There is no arrow in the forest. Find your way by the red light, the trails and landmarks, and the forest map in the booklet (J → Map).'),
   storage: T('In the chest: click moves a whole stack, Shift+click moves one item.'),
 };
+// the same tips with the Xbox controller's buttons, shown while the controller is in use
+const PAD_TIPS = {
+  move: T('Left stick to move · right stick to look · hold RT to run.'),
+  interact: T('When a prompt shows at the bottom of the screen, press X to check or pick up an object.'),
+  flashlight: T('Y turns the flashlight on and off.'),
+  journal: T('RB opens the booklet: what I know, the clues I found and the map.'),
+  clue: T('Every clue goes into the booklet (RB → Clues). Your mission updates as you discover more.'),
+  locked: T('This has a combination lock. Look around for details that explain it. Everything you found is in the booklet (RB).'),
+  hint: T('Stuck? LB gives a hint. Each press is clearer, and the last one explains the answer.'),
+  forest: T('There is no arrow in the forest. Find your way by the red light, the trails and landmarks, and the forest map in the booklet (RB → Map).'),
+  storage: T('In the chest: A moves a whole stack.'),
+};
 function tip(id) {
   settings.tutorials = settings.tutorials || {};
   if (settings.tutorials[id] || !TIPS[id]) return;
   settings.tutorials[id] = true;
   saveSettings(settings);
-  ui.tip(TIPS[id]);
+  ui.tip(gamepad.active ? PAD_TIPS[id] : TIPS[id]);
 }
 // modes where the player is not playing: portals may only show ads then
 const IDLE_MODES = ['loading', 'title', 'paused', 'end'];
@@ -219,6 +232,18 @@ const api = {
 // Not offered in the game-portal builds (Poki / CrazyGames), whose rules limit outside connections.
 const ONLINE_ALLOWED = !['poki', 'crazygames'].includes(import.meta.env.MODE);
 const net = { panel: null, remotes: null, online: null, names: new Map(), badgeT: 0 };
+// Xbox / standard controller (see gamepad.js)
+const gamepad = new GamepadInput({
+  mode: () => game.mode,
+  input: () => game.input,
+  modal: () => legal.isOpen || !!(net.panel && net.panel.isOpen) || !$('confirm').classList.contains('hidden'),
+  // screens that use the arrow keys themselves: the character select, the dial puzzle
+  arrowsOwner: () => (ui.deviceKey ? 'all' : lobby && lobby.active && lobby.view === 'select' && game.mode === 'title' ? 'lr' : false),
+  look: (dx, dy) => player && player.look(dx, dy),
+  releasePointer,
+  onActive: () => updateLockHint(),
+});
+
 const netName = () => settings.netName || skinById(player.skinId || settings.skin).name;
 
 function setupOnline() {
@@ -566,6 +591,9 @@ function closeScope() {
 function updateScope(dt) {
   const sc = game.scope, inp = game.input;
   const sp = 0.45 * dt;
+  // controller: either stick pans the binoculars
+  sc.yaw -= ((inp.padX || 0) + (inp.padLookX || 0)) * sp * 1.4;
+  sc.pitch += ((inp.padY || 0) - (inp.padLookY || 0)) * sp;
   if (inp.ArrowLeft || inp.KeyA) sc.yaw += sp;
   if (inp.ArrowRight || inp.KeyD) sc.yaw -= sp;
   if (inp.ArrowUp || inp.KeyW) sc.pitch += sp * 0.7;
@@ -1148,7 +1176,7 @@ function releasePointer() {
   updateLockHint();
 }
 function updateLockHint() {
-  ui.show('lock-hint', game.mode === 'play' && !game.pointerLocked && !game.dragging);
+  ui.show('lock-hint', game.mode === 'play' && !game.pointerLocked && !game.dragging && !gamepad.active);
 }
 
 document.addEventListener('pointerlockchange', () => {
@@ -1212,7 +1240,8 @@ window.addEventListener('keydown', (e) => {
       if (game.mode === 'play') {
         settings.firstPerson = !settings.firstPerson;
         saveSettings(settings);
-        ui.toast(settings.firstPerson ? T('View: through the eyes · Q to switch back') : T('View: from behind · Q to switch'), '', 2);
+        if (gamepad.active) ui.toast(settings.firstPerson ? T('View: through the eyes · B to switch back') : T('View: from behind · B to switch'), '', 2);
+        else ui.toast(settings.firstPerson ? T('View: through the eyes · Q to switch back') : T('View: from behind · Q to switch'), '', 2);
       }
       break;
     case 'KeyF':
@@ -1347,6 +1376,7 @@ const MEASURE_MODES = ['play', 'cine', 'scope', 'title', 'wake', 'intro'];
 function loop() {
   requestAnimationFrame(loop);
   const raw = clock.getDelta();
+  gamepad.update(Math.min(raw, 0.1));
   if (fpsEl) { renderer.info.autoReset = false; renderer.info.reset(); }
   step(Math.min(raw, 0.05));
   if (game.zone && game.mode !== 'intro') fogCull.update(raw, camera, env.scene.fog);

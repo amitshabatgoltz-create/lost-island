@@ -1,6 +1,17 @@
 // Hebrew text, keyed by the English text it replaces. Templates use {0}, {1}... for the values in ${...}.
 // Keep new keys exactly equal to the English string in the code.
 export const HE = {
+ "Left stick to move · right stick to look · hold RT to run.": "סטיק שמאלי — תנועה · סטיק ימני — מצלמה · להחזיק RT — ריצה.",
+ "When a prompt shows at the bottom of the screen, press X to check or pick up an object.": "כשמופיעה הודעה בתחתית המסך, לחץ X כדי לבדוק או להרים חפץ.",
+ "Y turns the flashlight on and off.": "Y מדליק ומכבה את הפנס.",
+ "RB opens the booklet: what I know, the clues I found and the map.": "RB פותח את החוברת: מה אני יודע, הרמזים שמצאתי והמפה.",
+ "Every clue goes into the booklet (RB → Clues). Your mission updates as you discover more.": "כל רמז נכנס לחוברת (RB ← רמזים). המשימה מתעדכנת ככל שמגלים יותר.",
+ "This has a combination lock. Look around for details that explain it. Everything you found is in the booklet (RB).": "יש פה מנעול קוד. חפש מסביב פרטים שמסבירים אותו. כל מה שמצאת נמצא בחוברת (RB).",
+ "Stuck? LB gives a hint. Each press is clearer, and the last one explains the answer.": "נתקעת? LB נותן רמז. כל לחיצה ברורה יותר, והאחרונה מסבירה את התשובה.",
+ "There is no arrow in the forest. Find your way by the red light, the trails and landmarks, and the forest map in the booklet (RB → Map).": "ביער אין חץ. מצא את הדרך לפי האור האדום, השבילים וסימני הדרך, ומפת היער בחוברת (RB ← מפה).",
+ "In the chest: A moves a whole stack.": "בתיבה: A מעביר ערימה שלמה.",
+ "View: through the eyes · B to switch back": "מבט: דרך העיניים · B כדי לחזור",
+ "View: from behind · B to switch": "מבט: מאחור · B כדי להחליף",
  "Usernames and friends are not set up yet. You can still create or join a room with a code.": "שמות משתמש וחברים עוד לא הוגדרו. אפשר בינתיים ליצור חדר או להצטרף עם קוד.",
  "Could not load your username and friends. You can still create or join a room with a code.": "לא הצלחתי לטעון את שם המשתמש והחברים. אפשר בינתיים ליצור חדר או להצטרף עם קוד.",
  "Online": "אונליין",
@@ -870,7 +881,7 @@ export const HE = {
  "View: through the eyes · Q to switch back": "מבט: דרך העיניים · Q כדי לחזור",
  "View: from behind · Q to switch": "מבט: מאחור · Q כדי להחליף",
  "Too dense here. The lights are to the north-east: the trail past the camp leads that way.": "סבוך מדי כאן. האורות בצפון־מזרח: השביל שאחרי המחנה מוביל לשם.",
- "<div class=\"bigmap-foot\"><span><kbd>M</kbd> / <kbd>Esc</kbd> close</span><span class=\"bigmap-scale\"></span></div></div>": "<div class=\"bigmap-foot\"><span><kbd>M</kbd> / <kbd>Esc</kbd> סגירה</span><span class=\"bigmap-scale\"></span></div></div>",
+ "<div class=\"bigmap-foot\"><span><kbd data-pad=\"⧉\">M</kbd> / <kbd data-pad=\"B\">Esc</kbd> close</span><span class=\"bigmap-scale\"></span></div></div>": "<div class=\"bigmap-foot\"><span><kbd data-pad=\"⧉\">M</kbd> / <kbd data-pad=\"B\">Esc</kbd> סגירה</span><span class=\"bigmap-scale\"></span></div></div>",
  "<i style=\"width:{0}px\"></i>{1} m": "<i style=\"width:{0}px\"></i>{1} מ׳",
  "Part {0} · coming soon": "חלק {0} · בקרוב",
  "N-1: the facility": "N-1: המתקן",
@@ -1156,5 +1167,8 @@ export const HE_HTML = {
  "view": "מבט",
  "map": "מפה",
  "WASD move · mouse look · Q eyes / behind · Shift run · E interact · J journal and booklet · M map · H hint · F flashlight · Esc menu": "WASD תנועה · עכבר מצלמה · Q עיניים / מאחור · Shift ריצה · E אינטראקציה · J חקירה וחוברת · M מפה · H רמז · F פנס · Esc תפריט",
- "Language": "שפה"
+ "Language": "שפה",
+ "jump": "קפיצה",
+ "Skip": "דלג",
+ "Select": "בחירה"
 };

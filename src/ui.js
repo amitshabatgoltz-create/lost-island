@@ -88,7 +88,7 @@ export class UI {
     const p = $('prompt');
     if (!text) { p.classList.add('hidden'); this._prompt = null; return; }
     if (this._prompt !== text) {
-      p.innerHTML = `<kbd>E</kbd>${text}`;
+      p.innerHTML = `<kbd data-pad="X">E</kbd>${text}`;
       this._prompt = text;
     }
     p.classList.toggle('locked', locked);
@@ -246,6 +246,7 @@ export class UI {
 
   hintControls(show) {
     $('controls-hint').classList.toggle('faded', !show);
+    $('pad-hint').classList.toggle('faded', !show);
   }
 
   // ------------------------------------------------------------ cinematic
