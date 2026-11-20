@@ -550,11 +550,13 @@ export class Player {
     const x0 = this.pos.x, z0 = this.pos.z, gh0 = this.heightAt(x0, z0);
     // ---------- movement
     let mx = 0, mz = 0;
-    const wantsMove = controlEnabled && (input.KeyW || input.ArrowUp || input.KeyS || input.ArrowDown || input.KeyA || input.ArrowLeft || input.KeyD || input.ArrowRight);
+    // controller left stick (analog, already past its dead zone): padX right, padY forward
+    const padX = input.padX || 0, padY = input.padY || 0;
+    const wantsMove = controlEnabled && (input.KeyW || input.ArrowUp || input.KeyS || input.ArrowDown || input.KeyA || input.ArrowLeft || input.KeyD || input.ArrowRight || padX || padY);
     if (this.sitting && wantsMove && this.act && this.act.name === 'Sitting') this.standUp();
     if (controlEnabled && !this.busy) {
-      const f = (input.KeyW || input.ArrowUp ? 1 : 0) - (input.KeyS || input.ArrowDown ? 1 : 0);
-      const r = (input.KeyD || input.ArrowRight ? 1 : 0) - (input.KeyA || input.ArrowLeft ? 1 : 0);
+      const f = (input.KeyW || input.ArrowUp ? 1 : 0) - (input.KeyS || input.ArrowDown ? 1 : 0) + padY;
+      const r = (input.KeyD || input.ArrowRight ? 1 : 0) - (input.KeyA || input.ArrowLeft ? 1 : 0) + padX;
       const fw = this.forward();
       const rt = new THREE.Vector3(Math.cos(this.camYaw), 0, -Math.sin(this.camYaw));
       mx = fw.x * f + rt.x * r;
@@ -562,7 +564,7 @@ export class Player {
       const len = Math.hypot(mx, mz);
       if (len > 0) { mx /= len; mz /= len; }
     }
-    const running = controlEnabled && (input.ShiftLeft || input.ShiftRight);
+    const running = controlEnabled && (input.ShiftLeft || input.ShiftRight || input.padRun);
     const targetSpeed = (mx || mz) ? (running ? RUN : WALK) : 0;
     const accel = targetSpeed > this.speed ? 7 : 10;
     if (!this.air) this.speed += (targetSpeed - this.speed) * Math.min(1, dt * accel); // in the air: no steering

@@ -79,7 +79,7 @@
       <div id="quest-title"></div>
       <div id="quest-obj"></div>
       <ul id="quest-sub"></ul>
-      <div class="quest-keys"><span><kbd>J</kbd> What I know</span><span id="quest-hint" class="hidden"><kbd>H</kbd> Hint</span></div>
+      <div class="quest-keys"><span><kbd data-pad="RB">J</kbd> What I know</span><span id="quest-hint" class="hidden"><kbd data-pad="LB">H</kbd> Hint</span></div>
     </div>
     <div id="tip" class="hidden" role="status" aria-live="polite"><span class="tip-k">Tip</span><span id="tip-text"></span></div>
     <div id="marker" class="hidden">
@@ -92,13 +92,17 @@
     <div id="controls-hint" class="panel">
       <span><b>WASD</b> move</span><span><b>Mouse</b> look</span><span><b>Q</b> view</span><span><b>Shift</b> run</span><span><b>E</b> use</span><span><b>J</b> journal</span><span><b>M</b> map</span><span><b>F</b> flashlight</span><span><b>H</b> hint</span><span><b>Esc</b> menu</span>
     </div>
+    <div id="pad-hint" class="panel">
+      <span><i class="pb">L</i>move</span><span><i class="pb">R</i>look</span><span><i class="pb a">A</i>jump</span><span><i class="pb x">X</i>use</span><span><i class="pb y">Y</i>flashlight</span><span><i class="pb b">B</i>view</span><span><i class="pb">RT</i>run</span><span><i class="pb">RB</i>journal</span><span><i class="pb">⧉</i>map</span><span><i class="pb">LB</i>hint</span><span><i class="pb">☰</i>menu</span>
+    </div>
     <div id="lock-hint" class="hidden">Click the screen to control the camera</div>
   </div>
 
   <!-- cinematic layers -->
   <div id="subtitles"></div>
   <div id="titlecard" class="hidden"><div class="tc-a"></div><div class="tc-b"></div></div>
-  <div id="skip-hint" class="hidden">[Space] Skip</div>
+  <div id="skip-hint" class="hidden"><span class="kb-only">[Space] Skip</span><span class="pad-only"><i class="pb a">A</i>Skip</span></div>
+  <div id="pad-bar" aria-hidden="true"><span><i class="pb a">A</i>Select</span><span><i class="pb b">B</i>Back</span></div>
   <div id="eyelids" class="hidden"><div class="lid top"></div><div class="lid bottom"></div></div>
   <div id="flash"></div>
   <div id="fade"></div>

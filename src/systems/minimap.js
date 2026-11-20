@@ -156,7 +156,7 @@ export class BigMap {
     el.id = 'bigmap';
     el.className = 'screen hidden';
     el.innerHTML = '<div class="bigmap-frame"><div class="bigmap-title"></div><canvas></canvas>'
-      + T('<div class="bigmap-foot"><span><kbd>M</kbd> / <kbd>Esc</kbd> close</span><span class="bigmap-scale"></span></div></div>');
+      + T('<div class="bigmap-foot"><span><kbd data-pad="⧉">M</kbd> / <kbd data-pad="B">Esc</kbd> close</span><span class="bigmap-scale"></span></div></div>');
     document.body.appendChild(el);
     this.el = el;
     this.canvas = el.querySelector('canvas');
